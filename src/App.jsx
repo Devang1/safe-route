@@ -1,12 +1,14 @@
 import { useState,useEffect } from 'react';
-import { Map } from './components/Map';
+import  Map from './components/Map';
 import { ReportForm } from './components/ReportForm';
 import { RouteForm } from './components/RouteForm';
 import { mockReports } from './data/mockData';
 import { Navigation, FileText, PlusCircle } from 'lucide-react';
-
-function App() {
+import {BrowserRouter, Navigate, Route,Routes,useNavigate } from "react-router-dom";
+import Login from "./components/auth/index";
+function Home() {
   const [reports, setReports] = useState([]);
+  const navigate=useNavigate();
   const [activeTab, setActiveTab] = useState('reports');
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [routePoints, setRoutePoints] = useState({});
@@ -40,6 +42,7 @@ function App() {
             <Navigation className="text-blue-600" />
             SafeRoute Guardian
           </h1>
+          <button onClick={()=>navigate("/login")}>Sign up</button>
         </div>
       </header>
 
@@ -142,5 +145,14 @@ function App() {
     </div>
   );
 }
-
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
 export default App;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -45,81 +45,74 @@ const getDistanceFromLatLng = (lat1, lng1, lat2, lng2) => {
   const Δφ = (lat2 - lat1) * Math.PI / 180;
   const Δλ = (lng2 - lng1) * Math.PI / 180;
 
-  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-          Math.cos(φ1) * Math.cos(φ2) *
-          Math.sin(Δλ/2) * Math.sin(Δλ/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) *
+    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   return R * c; // Distance in meters
 };
 
 const getPointToLineDistance = (point, lineStart, lineEnd) => {
-  const lat = point[0];
-  const lng = point[1];
-  const lat1 = lineStart.lat;
-  const lng1 = lineStart.lng;
-  const lat2 = lineEnd.lat;
-  const lng2 = lineEnd.lng;
+  const [pointLat, pointLng] = point;
+  const startLat = lineStart.lat || lineStart[0];
+  const startLng = lineStart.lng || lineStart[1];
+  const endLat = lineEnd.lat || lineEnd[0];
+  const endLng = lineEnd.lng || lineEnd[1];
 
-  // Convert to radians
-  const φ1 = lat1 * Math.PI / 180;
-  const φ2 = lat2 * Math.PI / 180;
-  const φ = lat * Math.PI / 180;
-  const λ1 = lng1 * Math.PI / 180;
-  const λ2 = lng2 * Math.PI / 180;
-  const λ = lng * Math.PI / 180;
+  const lat = Number(pointLat);
+  const lng = Number(pointLng);
+  const lat1 = Number(startLat);
+  const lng1 = Number(startLng);
+  const lat2 = Number(endLat);
+  const lng2 = Number(endLng);
 
-  // If line segment is very short, just return distance to one endpoint
   if (Math.abs(lat1 - lat2) < 0.00001 && Math.abs(lng1 - lng2) < 0.00001) {
     return getDistanceFromLatLng(lat, lng, lat1, lng1);
   }
 
-  // Calculate the bearing from start to end
-  const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
-  const x = Math.cos(φ1) * Math.sin(φ2) -
-           Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
-  const bearing1 = Math.atan2(y, x);
+  const d1 = getDistanceFromLatLng(lat, lng, lat1, lng1);
+  const d2 = getDistanceFromLatLng(lat, lng, lat2, lng2);
+  const lineLength = getDistanceFromLatLng(lat1, lng1, lat2, lng2);
 
-  // Calculate the bearing from start to point
-  const y2 = Math.sin(λ - λ1) * Math.cos(φ);
-  const x2 = Math.cos(φ1) * Math.sin(φ) -
-            Math.sin(φ1) * Math.cos(φ) * Math.cos(λ - λ1);
-  const bearing2 = Math.atan2(y2, x2);
+  const bearing1 = Math.atan2(
+    Math.sin(lng2 - lng1) * Math.cos(lat2),
+    Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lng2 - lng1)
+  );
 
-  // Calculate distance from start to point
-  const d13 = getDistanceFromLatLng(lat1, lng1, lat, lng);
+  const bearing2 = Math.atan2(
+    Math.sin(lng - lng1) * Math.cos(lat),
+    Math.cos(lat1) * Math.sin(lat) - Math.sin(lat1) * Math.cos(lat) * Math.cos(lng - lng1)
+  );
 
-  // Calculate cross-track distance
-  const dxt = Math.abs(Math.asin(Math.sin(d13/6371e3) * 
-                      Math.sin(bearing2 - bearing1)) * 6371e3);
+  const latRad = lat * Math.PI / 180;
+  const lat1Rad = lat1 * Math.PI / 180;
+  const R = 6371e3;
 
-  // Calculate along-track distance
-  const dat = Math.acos(Math.cos(d13/6371e3) / 
-                       Math.cos(dxt/6371e3)) * 6371e3;
+  const dxt = Math.asin(
+    Math.sin(d1 / R) * Math.sin(bearing2 - bearing1)
+  ) * R;
 
-  // Check if point is beyond the segment endpoints
-  const d12 = getDistanceFromLatLng(lat1, lng1, lat2, lng2);
-  
-  if (dat > d12) {
-    return getDistanceFromLatLng(lat, lng, lat2, lng2);
-  }
-  
-  if (dat < 0) {
-    return getDistanceFromLatLng(lat, lng, lat1, lng1);
-  }
+  const dat = Math.acos(
+    Math.cos(d1 / R) / Math.cos(dxt / R)
+  ) * R;
 
-  return dxt;
+  if (dat > lineLength) return d2;
+  if (dat < 0) return d1;
+
+  return Math.abs(dxt);
 };
 
-const isPointNearPolyline = (point, coordinates, tolerance = 400) => { // Changed tolerance to 400 meters
+const isPointNearPolyline = (point, coordinates, tolerance = 1000) => {
+  let minDistance = Infinity;
   for (let i = 0; i < coordinates.length - 1; i++) {
     const distance = getPointToLineDistance(
       point,
       coordinates[i],
       coordinates[i + 1]
     );
-    
-    if (distance < tolerance) return true;
+    minDistance = Math.min(minDistance, distance);
+    if (minDistance <= tolerance) return true;
   }
   return false;
 };
@@ -131,7 +124,7 @@ const calculateSafetyScore = (safetyScore) => {
     safe: 1
   };
 
-  const weightedSum = 
+  const weightedSum =
     safetyScore.danger * weights.danger +
     safetyScore.caution * weights.caution -
     safetyScore.safe * weights.safe;
@@ -159,8 +152,9 @@ const RoutingMachine = ({
   selectedRouteIndex
 }) => {
   const map = useMap();
-  const [routeLayers, setRouteLayers] = useState([]);
   const [routingControl, setRoutingControl] = useState(null);
+  const [routeLayers, setRouteLayers] = useState([]);
+  const [routes, setRoutes] = useState([]);
   const [previousSelectedIndex, setPreviousSelectedIndex] = useState(null);
 
   useEffect(() => {
@@ -168,16 +162,28 @@ const RoutingMachine = ({
       const container = routingControl.getContainer();
       if (container) {
         container.style.display = showDirections ? 'block' : 'none';
+        
+        // Only update instructions visibility, keep routes visible
+        const alternatives = container.querySelectorAll('.leaflet-routing-alt');
+        alternatives.forEach((alt, index) => {
+          alt.style.display = showDirections && index === selectedRouteIndex ? 'block' : 'none';
+        });
+
+        // Update selected route
+        if (routes[selectedRouteIndex]) {
+          routingControl._selectedRoute = selectedRouteIndex;
+          routingControl.fire('routeselected', { route: routes[selectedRouteIndex] });
+        }
       }
     }
-  }, [showDirections, routingControl]);
+  }, [showDirections, selectedRouteIndex, routingControl, routes]);
 
   useEffect(() => {
     if (previousSelectedIndex !== null && previousSelectedIndex !== selectedRouteIndex && routeLayers[previousSelectedIndex]) {
       routeLayers[previousSelectedIndex].setStyle({
         dashArray: '10, 10',
         weight: 4,
-        opacity: showDirections ? 0.6 : 0,
+        opacity: 0.6,
       });
     }
 
@@ -185,7 +191,7 @@ const RoutingMachine = ({
       routeLayers[selectedRouteIndex].setStyle({
         dashArray: null,
         weight: 8,
-        opacity: showDirections ? 1 : 0,
+        opacity: 1,
       });
 
       const bounds = routeLayers[selectedRouteIndex].getBounds();
@@ -193,7 +199,7 @@ const RoutingMachine = ({
     }
 
     setPreviousSelectedIndex(selectedRouteIndex);
-  }, [selectedRouteIndex, showDirections]);
+  }, [selectedRouteIndex]);
 
   useEffect(() => {
     if (!startPoint || !endPoint) return;
@@ -206,9 +212,9 @@ const RoutingMachine = ({
     }
 
     const routeStyles = [
-      { color: '#2563eb', name: 'Fastest Route' },
-      { color: '#dc2626', name: 'Alternative 1' },
-      { color: '#059669', name: 'Alternative 2' },
+      { color: '#059669', name: 'Safest Route' },
+      { color: '#2563eb', name: 'Alternative ' },
+      { color: '#dc2626', name: 'Alternative 2' },
       { color: '#7c3aed', name: 'Alternative 3' },
     ];
 
@@ -224,7 +230,14 @@ const RoutingMachine = ({
       routeWhileDragging: false,
       show: showDirections,
       lineOptions: { styles: [] },
-      containerClassName: 'leaflet-routing-container',
+      plan: new L.Routing.Plan([
+        L.latLng(startPoint.lat, startPoint.lng),
+        L.latLng(endPoint.lat, endPoint.lng)
+      ], {
+        createMarker: () => null,
+        draggableWaypoints: false,
+        addWaypoints: false,
+      }),
     }).addTo(map);
 
     const container = control.getContainer();
@@ -245,34 +258,9 @@ const RoutingMachine = ({
     setRoutingControl(control);
 
     control.on('routesfound', (e) => {
+      setRoutes(e.routes);
       const newLayers = [];
-      const routeData = e.routes.map((route, i) => {
-        const style = routeStyles[i % routeStyles.length];
-        const isSelected = i === selectedRouteIndex;
-
-        const polyline = L.polyline(route.coordinates, {
-          color: style.color,
-          weight: isSelected ? 8 : 4,
-          opacity: showDirections ? (isSelected ? 1 : 0.6) : 0,
-          dashArray: isSelected ? null : '10, 10',
-          lineCap: 'round',
-        }).addTo(map);
-
-        if (isSelected) {
-          map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
-        }
-
-        polyline.on('mouseover', () => {
-          if (!isSelected) polyline.setStyle({ weight: 6, opacity: 1 });
-        });
-
-        polyline.on('mouseout', () => {
-          if (!isSelected) polyline.setStyle({ weight: 4, opacity: showDirections ? 0.6 : 0, dashArray: '10, 10' });
-        });
-
-        newLayers.push(polyline);
-
-        // Count reports near the route using improved distance calculation
+      let routeData = e.routes.map((route, i) => {
         const nearReports = reports.filter(report => {
           const reportLocation = normalizeLocation(report.location);
           return isPointNearPolyline(reportLocation, route.coordinates);
@@ -287,11 +275,50 @@ const RoutingMachine = ({
         const overallSafetyScore = calculateSafetyScore(safetyScore);
 
         return {
+          route,
           index: i,
-          name: style.name,
-          summary: route.summary,
           safetyScore,
           overallSafetyScore,
+        };
+      });
+
+      // Sort routes by safety score (highest first)
+      routeData.sort((a, b) => b.overallSafetyScore - a.overallSafetyScore);
+
+      routeData = routeData.map((data, i) => {
+        const style = routeStyles[i % routeStyles.length];
+        const isSelected = i === selectedRouteIndex;
+
+        const polyline = L.polyline(data.route.coordinates, {
+          color: style.color,
+          weight: isSelected ? 8 : 4,
+          opacity: isSelected ? 1 : 0.6,
+          dashArray: isSelected ? null : '10, 10',
+          lineCap: 'round',
+        }).addTo(map);
+
+        if (isSelected) {
+          map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+        }
+
+        polyline.on('mouseover', () => {
+          if (!isSelected) polyline.setStyle({ weight: 6, opacity: 1 });
+        });
+
+        polyline.on('mouseout', () => {
+          if (!isSelected) polyline.setStyle({ 
+            weight: 4, 
+            opacity: 0.6, 
+            dashArray: '10, 10' 
+          });
+        });
+
+        newLayers.push(polyline);
+
+        return {
+          ...data,
+          name: style.name,
+          summary: data.route.summary,
           color: style.color,
           isDashed: !isSelected,
         };
@@ -305,7 +332,7 @@ const RoutingMachine = ({
       control.remove();
       routeLayers.forEach((layer) => map.removeLayer(layer));
     };
-  }, [startPoint, endPoint, reports, showDirections]);
+  }, [startPoint, endPoint, reports]);
 
   return null;
 };
@@ -411,8 +438,8 @@ const RouteSafetyPanel = ({ routes, visible, onToggle, selectedRouteIndex, onRou
           <div
             key={i}
             className={`mb-4 p-3 rounded-lg border transition-colors cursor-pointer ${
-              selectedRouteIndex === i 
-                ? 'bg-blue-50 border-blue-200' 
+              selectedRouteIndex === i
+                ? 'bg-blue-50 border-blue-200'
                 : 'hover:bg-gray-50 border-gray-200'
             }`}
             onClick={() => onRouteSelect(i)}
@@ -433,7 +460,7 @@ const RouteSafetyPanel = ({ routes, visible, onToggle, selectedRouteIndex, onRou
                 <span className="text-blue-600 text-sm">Selected</span>
               )}
             </div>
-            
+
             <div className="grid grid-cols-2 gap-2 mb-2">
               <div className="text-sm text-gray-600">
                 <div>Distance: {(r.summary.totalDistance / 1000).toFixed(2)} km</div>
@@ -466,7 +493,7 @@ const RouteSafetyPanel = ({ routes, visible, onToggle, selectedRouteIndex, onRou
   );
 };
 
-export const Map = ({ startPoint, endPoint, showHeatmap }) => {
+const Map = ({ startPoint, endPoint, showHeatmap = false }) => {
   const [userLocation, setUserLocation] = useState([28.6139, 77.209]);
   const [reports, setReports] = useState([]);
   const [routeSafetyInfo, setRouteSafetyInfo] = useState([]);
