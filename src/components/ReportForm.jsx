@@ -119,11 +119,11 @@ export const ReportForm = () => {
   const center = location || [20.5937, 78.9629]; // Default: India
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-3xl mx-auto p-6 space-y-6 bg-white shadow rounded-lg">
+    <form onSubmit={handleSubmit} className="max-w-3xl mx-auto p-6 space-y-6 bg-[#1E1E1E] text-[#E0E0E0] shadow rounded-lg">
       {/* Category */}
       <div>
         <label className="block font-semibold mb-2">Category</label>
-        <div className="flex gap-3">
+        <div className="flex gap-3 ">
           {[
             { value: 'safe', label: 'Safe', icon: <Shield size={18} /> },
             { value: 'caution', label: 'Caution', icon: <AlertCircle size={18} /> },
@@ -140,7 +140,7 @@ export const ReportForm = () => {
                       caution: 'bg-yellow-100 text-yellow-800',
                       danger: 'bg-red-100 text-red-800',
                     }[opt.value]
-                  : 'bg-gray-100'
+                  : 'text-gray-300 hover:text-white bg-[#444444a4]'
               }`}
             >
               {opt.icon}
@@ -158,7 +158,7 @@ export const ReportForm = () => {
           onChange={(e) => setDescription(e.target.value)}
           required
           rows={3}
-          className="w-full border px-3 py-2 rounded-md"
+          className="w-full border px-3 py-2 rounded-md text-gray-300 bg-[#444444a4]"
         />
       </div>
 
@@ -169,7 +169,7 @@ export const ReportForm = () => {
           <button
             type="button"
             onClick={getCurrentLocation}
-            className="border px-4 py-2 rounded-md bg-white hover:bg-gray-100 text-sm"
+            className="border px-4 py-2 rounded-md text-gray-300 hover:text-white bg-[#444444a4] text-sm"
           >
             Use GPS
           </button>
@@ -179,7 +179,7 @@ export const ReportForm = () => {
               setLocationMode('map');
               setLocation(null);
             }}
-            className="border px-4 py-2 rounded-md bg-white hover:bg-gray-100 text-sm"
+            className="border px-4 py-2 rounded-md text-gray-300 hover:text-white bg-[#444444a4] text-sm"
           >
             Pick on Map
           </button>
@@ -188,7 +188,7 @@ export const ReportForm = () => {
               value={locationInput}
               onChange={(e) => setLocationInput(e.target.value)}
               placeholder="Enter location name"
-              className="border px-3 py-2 rounded-md text-sm"
+              className="border px-3 py-2 rounded-md text-sm  text-gray-300 bg-[#444444a4]"
             />
             <button
               type="button"

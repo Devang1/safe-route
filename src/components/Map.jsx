@@ -136,11 +136,11 @@ const calculateSafetyScore = (safetyScore) => {
 };
 
 const getSafetyLabel = (score) => {
-  if (score >= 80) return { text: 'Very Safe', color: 'text-green-600' };
+  if (score >= 80) return { text: 'Very Safe', color: 'text-green-400' };
   if (score >= 60) return { text: 'Safe', color: 'text-green-500' };
   if (score >= 40) return { text: 'Moderate', color: 'text-yellow-500' };
   if (score >= 20) return { text: 'Caution', color: 'text-orange-500' };
-  return { text: 'High Risk', color: 'text-red-600' };
+  return { text: 'High Risk', color: 'text-red-500' };
 };
 
 const RoutingMachine = ({
@@ -213,7 +213,7 @@ const RoutingMachine = ({
 
     const routeStyles = [
       { color: '#059669', name: 'Safest Route' },
-      { color: '#2563eb', name: 'Alternative ' },
+      { color: '#2563eb', name: 'Alternative 1' },
       { color: '#dc2626', name: 'Alternative 2' },
       { color: '#7c3aed', name: 'Alternative 3' },
     ];
@@ -246,13 +246,14 @@ const RoutingMachine = ({
       top: '70px',
       right: '10px',
       display: showDirections ? 'block' : 'none',
-      backgroundColor: 'white',
+      backgroundColor: '#1F2937',
       padding: '10px',
       borderRadius: '4px',
       boxShadow: '0 1px 5px rgba(0,0,0,0.2)',
       maxHeight: '400px',
       overflowY: 'auto',
       zIndex: 999,
+      color:"#fffff0",
     });
 
     setRoutingControl(control);
@@ -317,7 +318,7 @@ const RoutingMachine = ({
 
         return {
           ...data,
-          name: style.name,
+          name: i === 0 ? style.name : `Alternative ${i}`,
           summary: data.route.summary,
           color: style.color,
           isDashed: !isSelected,
@@ -350,9 +351,9 @@ const HeatmapLayer = ({ reports }) => {
       radius: 25,
       blur: 15,
       gradient: {
-        0.2: 'green',
-        0.5: 'yellow',
-        1.0: 'red',
+        0.2: '#22c55e',
+        0.5: '#facc15',
+        1.0: '#ef4444',
       },
     }).addTo(map);
 
@@ -419,18 +420,20 @@ const RouteSafetyPanel = ({ routes, visible, onToggle, selectedRouteIndex, onRou
     return (
       <button
         onClick={onToggle}
-        className="absolute bottom-4 left-4 bg-blue-600 text-white px-4 py-2 rounded shadow z-[999]"
+        className="absolute bottom-4 left-4 bg-blue-600 text-white px-4 py-2 rounded shadow-lg z-[999] hover:bg-blue-700 transition-colors"
       >
-        Show Route Safety
+        Show Safe Routes
       </button>
     );
   }
 
   return (
-    <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-md p-4 w-80 z-[999]">
+    <div className="absolute bottom-4 left-4 bg-gray-800 rounded-lg shadow-xl p-4 w-80 z-[999] text-gray-100">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-semibold">Route Safety</h2>
-        <button onClick={onToggle} className="text-sm text-blue-600 hover:underline">Hide</button>
+        <h2 className="text-lg font-semibold text-white">Safe Routes</h2>
+        <button onClick={onToggle} className="text-sm text-blue-400 hover:text-blue-300 hover:underline">
+          Hide
+        </button>
       </div>
       {routes.map((r, i) => {
         const safetyLabel = getSafetyLabel(r.overallSafetyScore);
@@ -439,8 +442,8 @@ const RouteSafetyPanel = ({ routes, visible, onToggle, selectedRouteIndex, onRou
             key={i}
             className={`mb-4 p-3 rounded-lg border transition-colors cursor-pointer ${
               selectedRouteIndex === i
-                ? 'bg-blue-50 border-blue-200'
-                : 'hover:bg-gray-50 border-gray-200'
+                ? 'bg-gray-700 border-blue-500'
+                : 'hover:bg-gray-700 border-gray-600'
             }`}
             onClick={() => onRouteSelect(i)}
           >
@@ -454,36 +457,36 @@ const RouteSafetyPanel = ({ routes, visible, onToggle, selectedRouteIndex, onRou
                     borderStyle: r.isDashed ? 'dashed' : 'solid',
                   }}
                 ></span>
-                <span className="font-medium">{r.name}</span>
+                <span className="font-medium text-gray-200">{r.name}</span>
               </div>
               {selectedRouteIndex === i && (
-                <span className="text-blue-600 text-sm">Selected</span>
+                <span className="text-blue-400 text-sm">Selected</span>
               )}
             </div>
 
             <div className="grid grid-cols-2 gap-2 mb-2">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-gray-400">
                 <div>Distance: {(r.summary.totalDistance / 1000).toFixed(2)} km</div>
                 <div>Duration: {(r.summary.totalTime / 60).toFixed(1)} min</div>
               </div>
               <div className="text-right">
-                <div className="text-lg font-semibold">{Math.round(r.overallSafetyScore)}</div>
+                <div className="text-lg font-semibold text-white">{Math.round(r.overallSafetyScore)}</div>
                 <div className={`text-sm ${safetyLabel.color}`}>{safetyLabel.text}</div>
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-sm">
-              <div className="flex flex-col items-center p-2 bg-red-50 rounded">
-                <span className="text-red-600 font-semibold">{r.safetyScore.danger}</span>
-                <span className="text-xs text-gray-600">Danger</span>
+              <div className="flex flex-col items-center p-2 bg-red-900/30 rounded">
+                <span className="text-red-400 font-semibold">{r.safetyScore.danger}</span>
+                <span className="text-xs text-gray-400">Danger</span>
               </div>
-              <div className="flex flex-col items-center p-2 bg-yellow-50 rounded">
-                <span className="text-yellow-600 font-semibold">{r.safetyScore.caution}</span>
-                <span className="text-xs text-gray-600">Caution</span>
+              <div className="flex flex-col items-center p-2 bg-yellow-900/30 rounded">
+                <span className="text-yellow-400 font-semibold">{r.safetyScore.caution}</span>
+                <span className="text-xs text-gray-400">Caution</span>
               </div>
-              <div className="flex flex-col items-center p-2 bg-green-50 rounded">
-                <span className="text-green-600 font-semibold">{r.safetyScore.safe}</span>
-                <span className="text-xs text-gray-600">Safe</span>
+              <div className="flex flex-col items-center p-2 bg-green-900/30 rounded">
+                <span className="text-green-400 font-semibold">{r.safetyScore.safe}</span>
+                <span className="text-xs text-gray-400">Safe</span>
               </div>
             </div>
           </div>
@@ -519,16 +522,21 @@ const Map = ({ startPoint, endPoint, showHeatmap = false }) => {
   }, []);
 
   return (
-    <div className="relative w-full h-full">
-      <MapContainer center={userLocation} zoom={13} className="h-[calc(100vh-4rem)] w-full z-0">
+    <div className="relative w-full h-full bg-[#1E1E1E]">
+      <MapContainer 
+        center={userLocation} 
+        zoom={13} 
+        className="h-[calc(100vh-4rem)] w-full z-0"
+        preferCanvas={true}
+      >
         <TileLayer
           attribution='&copy; OpenStreetMap contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
         />
         <UserLocationMarker position={userLocation} />
         {showHeatmap ? <HeatmapLayer reports={reports} /> : <DotsLayer reports={reports} />}
-        {startPoint && <Marker position={[startPoint.lat, startPoint.lng]} icon={blueIcon}><Popup>Start Point</Popup></Marker>}
-        {endPoint && <Marker position={[endPoint.lat, endPoint.lng]} icon={redIcon}><Popup>End Point</Popup></Marker>}
+        {startPoint && <Marker position={[startPoint.lat, startPoint.lng]} icon={blueIcon}><Popup className="dark-popup">Start Point</Popup></Marker>}
+        {endPoint && <Marker position={[endPoint.lat, endPoint.lng]} icon={redIcon}><Popup className="dark-popup">End Point</Popup></Marker>}
 
         {startPoint && endPoint && (
           <RoutingMachine
@@ -552,7 +560,7 @@ const Map = ({ startPoint, endPoint, showHeatmap = false }) => {
 
       <button
         onClick={() => setShowDirections((prev) => !prev)}
-        className="absolute top-4 right-4 bg-white text-gray-700 px-4 py-2 rounded shadow z-[999] hover:bg-gray-100"
+        className="absolute top-4 right-4 bg-gray-800 text-gray-200 px-4 py-2 rounded shadow-lg z-[999] hover:bg-gray-700 transition-colors"
       >
         {showDirections ? 'Hide Directions' : 'Show Directions'}
       </button>

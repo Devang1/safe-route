@@ -63,7 +63,7 @@ export const RouteForm = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 p-4 bg-white rounded-lg shadow">
+    <form onSubmit={handleSubmit} className="space-y-4 p-4 bg-[#1E1E1E] text-[#E0E0E0] rounded-lg shadow">
       <div>
         <label className="flex items-center space-x-2">
           <input
@@ -72,32 +72,32 @@ export const RouteForm = ({
             onChange={(e) => onUseCurrentLocationChange(e.target.checked)}
             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
           />
-          <span className="text-sm text-gray-700">Use my current location as starting point</span>
+          <span className="text-sm text-gray-300">Use my current location as starting point</span>
         </label>
       </div>
 
       {!useCurrentLocation && (
         <div>
-          <label className="block text-sm font-medium text-gray-700">Start Location</label>
+          <label className="block text-sm font-medium text-gray-300">Start Location</label>
           <input
             type="text"
             value={startLocation}
             onChange={(e) => setStartLocation(e.target.value)}
             placeholder="e.g., Connaught Place, Delhi"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-300 px-2 py-1 bg-[#444444a4]"
             required
           />
         </div>
       )}
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">Destination</label>
+        <label className="block text-sm font-medium text-gray-300">Destination</label>
         <input
           type="text"
           value={destinationLocation}
           onChange={(e) => setDestinationLocation(e.target.value)}
           placeholder="e.g., India Gate, Delhi"
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-300 px-2 py-1 bg-[#444444a4]"
           required
         />
       </div>
