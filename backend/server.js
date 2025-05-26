@@ -25,6 +25,7 @@ pool.connect()
 
 app.get('/api/reports', async (req, res) => {
   try {
+    console.log("reports")
     const result = await pool.query('SELECT type, latitude, longitude FROM report');
     const formatted = result.rows.map((row) => ({
       category: row.type,
