@@ -10,7 +10,7 @@ export default defineConfig({
   server:{
     proxy: {
       '/api': {
-        target: "https://safe-route-nm6k.onrender.com"||'http://localhost:5000',
+        target: "https://safe-route-nm6k.onrender.com",
         changeOrigin: true,
         secure: false,
       },
