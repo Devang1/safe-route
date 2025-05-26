@@ -515,7 +515,7 @@ const Map = ({ startPoint, endPoint, showHeatmap = false }) => {
   }, []);
 
   useEffect(() => {
-    fetch('https://safe-route-nm6k.onrender.com/reports')
+    fetch('/api/reports')
       .then(res => res.json())
       .then(data => setReports(data))
       .catch(err => console.error('Failed to fetch reports:', err));
