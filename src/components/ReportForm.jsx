@@ -60,7 +60,7 @@ export const ReportForm = () => {
     };
 
     try {
-      const res = await fetch('/api/submitReport', {
+      const res = await fetch('https://safe-route-nm6k.onrender.com/api/submitReport', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(report),
