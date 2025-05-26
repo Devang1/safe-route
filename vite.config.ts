@@ -12,7 +12,7 @@ export default defineConfig({
       '/api': {
         target: "https://safe-route-nm6k.onrender.com",
         changeOrigin: true,
-        secure: false,
+        secure: true,
       },
     }
   },
