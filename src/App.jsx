@@ -14,7 +14,7 @@ function Home() {
   const [routePoints, setRoutePoints] = useState({});
   const [useCurrentLocation, setUseCurrentLocation] = useState(false);
   useEffect(() => {
-      fetch('https://safe-route-nm6k.onrender.com/reportsDetails')
+      fetch('/api/reportsDetails')
         .then(res => res.json())
         .then(data => setReports(data))
         .catch(err => console.error('Failed to fetch reports:', err));
