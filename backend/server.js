@@ -8,7 +8,13 @@ const { Pool } = pkg;
 const app = express();
 const port = process.env.PORT||5000;
 
-app.use(cors());
+app.use(
+  cors({
+    origin:"https://safe-route-1.onrender.com",
+    methods:["GET","POST","PUT","PATCH","DELETE"],
+    credentials:true,
+  })
+)
 app.use(bodyParser.json());
 
 const pool = new Pool({
