@@ -12,11 +12,11 @@ app.use(cors());
 app.use(bodyParser.json());
 
 const pool = new Pool({
-  user: 'postgres',
-  host: 'localhost',
-  database: "SafeRoute",
-  password: '@Devang119',
-  port: 5432,
+  user: process.env.PG_USER||'postgres',
+  host: process.env.PG_HOST||'localhost',
+  database: process.env.PG_DATABASE||"SafeRoute",
+  password: process.env.PG_PASSWORD||'@Devang119',
+  port: process.env.PG_PORT||5432,
 });
 
 pool.connect()
