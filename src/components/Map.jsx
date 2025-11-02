@@ -38,6 +38,7 @@ const redIcon = new L.Icon({
 });
 
 // Voice Instruction Service
+// Enhanced Voice Instruction Service
 class VoiceNavigationService {
   constructor() {
     this.synth = window.speechSynthesis;
@@ -45,44 +46,89 @@ class VoiceNavigationService {
     this.utterance = null;
     this.lastInstruction = '';
     this.lastSpokeTime = 0;
+    this.isSpeaking = false;
+    
+    console.log('VoiceService initialized - Supported:', this.isSupported());
   }
 
   isSupported() {
-    return 'speechSynthesis' in window;
+    const supported = 'speechSynthesis' in window;
+    console.log('Speech synthesis supported:', supported);
+    return supported;
   }
 
   speak(instruction, force = false) {
-    if (!this.isEnabled || !this.isSupported()) return;
+    if (!this.isEnabled) {
+      console.log('Voice disabled, skipping:', instruction);
+      return;
+    }
+    
+    if (!this.isSupported()) {
+      console.warn('Speech synthesis not supported');
+      return;
+    }
 
     const now = Date.now();
-    if (!force && instruction === this.lastInstruction && (now - this.lastSpokeTime) < 5000) return;
+    if (!force && instruction === this.lastInstruction && (now - this.lastSpokeTime) < 5000) {
+      console.log('Skipping duplicate instruction:', instruction);
+      return;
+    }
 
+    // Cancel any ongoing speech
     this.cancel();
 
-    this.utterance = new SpeechSynthesisUtterance(instruction);
-    this.utterance.rate = 0.9;
-    this.utterance.pitch = 1.0;
-    this.utterance.volume = 0.8;
+    console.log('Speaking instruction:', instruction);
 
-    this.utterance.onend = () => {
-      this.lastInstruction = instruction;
-      this.lastSpokeTime = Date.now();
-    };
+    try {
+      this.utterance = new SpeechSynthesisUtterance(instruction);
+      this.utterance.rate = 0.9;
+      this.utterance.pitch = 1.0;
+      this.utterance.volume = 0.8;
 
-    this.synth.speak(this.utterance);
+      this.utterance.onstart = () => {
+        this.isSpeaking = true;
+        console.log('Speech started:', instruction);
+      };
+
+      this.utterance.onend = () => {
+        this.isSpeaking = false;
+        this.lastInstruction = instruction;
+        this.lastSpokeTime = Date.now();
+        console.log('Speech ended:', instruction);
+      };
+
+      this.utterance.onerror = (event) => {
+        this.isSpeaking = false;
+        console.error('Speech synthesis error:', event.error, 'for instruction:', instruction);
+      };
+
+      this.synth.speak(this.utterance);
+      
+    } catch (error) {
+      console.error('Error in speech synthesis:', error);
+    }
   }
 
   cancel() {
     if (this.synth.speaking) {
+      console.log('Cancelling ongoing speech');
       this.synth.cancel();
     }
+    this.isSpeaking = false;
   }
 
   setEnabled(enabled) {
+    console.log('Setting voice enabled:', enabled);
     this.isEnabled = enabled;
     if (!enabled) {
       this.cancel();
     }
+  }
+
+  // Test method to verify voice works
+  testVoice() {
+    console.log('Testing voice...');
+    this.speak('Voice guidance test. If you can hear this, voice is working properly.', true);
   }
 }
 
@@ -326,7 +372,7 @@ const RouteSelectionPanel = ({
     </div>
   );
 };
-// Unified Navigation Panel Component
+// Unified Navigation Panel Component with Real-time Progress
 const NavigationPanel = ({ 
   isNavigating, 
   onStartNavigation, 
@@ -335,10 +381,39 @@ const NavigationPanel = ({
   voiceEnabled,
   onVoiceToggle,
   nextInstruction,
-  distanceToNext
+  distanceToNext,
+  distanceLeft,  // Add this new prop
+  timeRemaining  // Add this new prop
 }) => {
   // Hide completely when not navigating
   if (!selectedRoute || !isNavigating) return null;
+
+  const testVoice = () => {
+    console.log('Manual voice test triggered');
+    voiceService.testVoice();
+  };
+
+  // Format distance for display
+  const formatDistance = (meters) => {
+    if (meters < 1000) {
+      return `${Math.round(meters)} m`;
+    } else {
+      return `${(meters / 1000).toFixed(1)} km`;
+    }
+  };
+
+  // Format time for display
+  const formatTime = (seconds) => {
+    if (seconds < 60) {
+      return '<1 min';
+    } else if (seconds < 3600) {
+      return `${Math.round(seconds / 60)} min`;
+    } else {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.round((seconds % 3600) / 60);
+      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+    }
+  };
 
   return (
     <div className="absolute top-4 left-4 right-4 bg-gray-800 rounded-lg shadow-xl p-3 z-[1000] text-white max-w-2xl mx-auto">
@@ -363,17 +438,38 @@ const NavigationPanel = ({
           <div className="flex items-center gap-4">
             <div className="text-sm">
               <div className="text-gray-400 text-xs">Distance Left</div>
-              <div className="font-semibold">21.6 km</div>
+              <div className="font-semibold">{formatDistance(distanceLeft)}</div>
             </div>
             <div className="text-sm">
               <div className="text-gray-400 text-xs">Time Remaining</div>
-              <div className="font-semibold">24 min</div>
+              <div className="font-semibold">{formatTime(timeRemaining)}</div>
             </div>
           </div>
+          
+          {/* Progress Bar */}
+          <div className="mt-2 w-full bg-gray-700 rounded-full h-2">
+            <div 
+              className="bg-green-500 h-2 rounded-full transition-all duration-1000 ease-out"
+              style={{ 
+                width: `${Math.min(100, Math.max(0, (selectedRoute?.summary?.totalDistance ? 
+                  ((selectedRoute.summary.totalDistance - distanceLeft) / selectedRoute.summary.totalDistance) * 100 : 0)))}%` 
+              }}
+            ></div>
+          </div>
+          
+          {/* Voice Debug Info - Only show in development */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-2 text-xs text-gray-400">
+              <div>Voice: {voiceEnabled ? 'ENABLED' : 'DISABLED'}</div>
+              <div>Next: "{nextInstruction}"</div>
+              <div>Next in: {Math.round(distanceToNext)}m</div>
+            </div>
+          )}
         </div>
 
         {/* Controls */}
         <div className="flex items-center gap-3">
+
           {/* Voice Control - Speaker Icon Only */}
           <button
             onClick={onVoiceToggle}
@@ -401,6 +497,147 @@ const NavigationPanel = ({
   );
 };
 // Real-time Navigation Component
+// Add these functions after isPointNearPolyline and before RouteSelectionPanel
+
+const calculateBearing = (point1, point2) => {
+  // Ensure coordinates are numbers
+  const lat1 = typeof point1[0] === 'number' ? point1[0] : parseFloat(point1[0]);
+  const lng1 = typeof point1[1] === 'number' ? point1[1] : parseFloat(point1[1]);
+  const lat2 = typeof point2[0] === 'number' ? point2[0] : parseFloat(point2[0]);
+  const lng2 = typeof point2[1] === 'number' ? point2[1] : parseFloat(point2[1]);
+  
+  // Convert to radians
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δλ = (lng2 - lng1) * Math.PI / 180;
+  
+  // Calculate bearing
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  const θ = Math.atan2(y, x);
+  
+  return (θ * 180 / Math.PI + 360) % 360;
+};
+
+const generateInstructionsFromCoordinates = (coordinates) => {
+  if (!coordinates || coordinates.length < 2) {
+    console.warn('Insufficient coordinates for instructions');
+    return [];
+  }
+
+  console.log('Generating instructions from', coordinates.length, 'coordinates');
+  
+  const instructions = [];
+  
+  // Start instruction - ensure proper coordinate format
+  const startCoord = Array.isArray(coordinates[0]) ? coordinates[0] : [coordinates[0].lat, coordinates[0].lng];
+  instructions.push({
+    point: startCoord,
+    text: 'Start navigation and follow the route',
+    type: 'depart',
+    distance: 0,
+    isStart: true
+  });
+
+  let accumulatedDistance = 0;
+  let lastInstructionIndex = 0;
+  
+  // Calculate total route distance properly
+  let totalDistance = 0;
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    const current = Array.isArray(coordinates[i]) ? coordinates[i] : [coordinates[i].lat, coordinates[i].lng];
+    const next = Array.isArray(coordinates[i + 1]) ? coordinates[i + 1] : [coordinates[i + 1].lat, coordinates[i + 1].lng];
+    totalDistance += getDistanceFromLatLng(current[0], current[1], next[0], next[1]);
+  }
+
+  console.log('Total route distance:', totalDistance, 'meters');
+  
+  // Generate intermediate instructions
+  for (let i = 1; i < coordinates.length - 1; i++) {
+    const prev = Array.isArray(coordinates[i - 1]) ? coordinates[i - 1] : [coordinates[i - 1].lat, coordinates[i - 1].lng];
+    const curr = Array.isArray(coordinates[i]) ? coordinates[i] : [coordinates[i].lat, coordinates[i].lng];
+    const next = Array.isArray(coordinates[i + 1]) ? coordinates[i + 1] : [coordinates[i + 1].lat, coordinates[i + 1].lng];
+    
+    // Calculate segment distance properly
+    const segmentDistance = getDistanceFromLatLng(prev[0], prev[1], curr[0], curr[1]);
+    
+    // Fix: Only add to accumulatedDistance if it's a valid number
+    if (!isNaN(segmentDistance) && isFinite(segmentDistance)) {
+      accumulatedDistance += segmentDistance;
+    } else {
+      console.warn('Invalid segment distance at index', i, ':', segmentDistance);
+      continue; // Skip this point if distance is invalid
+    }
+    
+    const bearing1 = calculateBearing(prev, curr);
+    const bearing2 = calculateBearing(curr, next);
+    
+    // Fix: Proper angle difference calculation
+    let angleDiff = Math.abs(bearing2 - bearing1);
+    if (angleDiff > 180) angleDiff = 360 - angleDiff;
+    
+    // More sensitive instruction generation
+    const shouldAddInstruction = 
+      angleDiff > 25 || // More sensitive to turns
+      accumulatedDistance > 300 || // More frequent distance-based instructions
+      (i - lastInstructionIndex) > 15 || // More frequent instructions
+      i === Math.floor(coordinates.length / 2); // Always add a midpoint instruction
+
+    if (shouldAddInstruction) {
+      let instructionType = 'continue';
+      let instructionText = 'Continue straight';
+      
+      if (angleDiff > 25 && angleDiff < 120) {
+        // Determine turn direction
+        let turnDirection = ((bearing2 - bearing1 + 360) % 360);
+        if (turnDirection > 180) turnDirection -= 360;
+        
+        if (turnDirection > 0) {
+          instructionType = angleDiff > 60 ? 'turn right' : 'bear right';
+          instructionText = angleDiff > 60 ? 'Turn right' : 'Bear right';
+        } else {
+          instructionType = angleDiff > 60 ? 'turn left' : 'bear left';
+          instructionText = angleDiff > 60 ? 'Turn left' : 'Bear left';
+        }
+      } else if (angleDiff >= 120) {
+        instructionType = 'turn around';
+        instructionText = 'Make a U-turn';
+      } else if (accumulatedDistance > 300) {
+        const distanceText = accumulatedDistance < 1000 ? 
+          `${Math.round(accumulatedDistance)} meters` : 
+          `${(accumulatedDistance / 1000).toFixed(1)} kilometers`;
+        instructionText = `Continue for ${distanceText}`;
+      }
+
+      instructions.push({
+        point: curr,
+        text: instructionText,
+        type: instructionType,
+        distance: accumulatedDistance,
+        isIntermediate: true
+      });
+      
+      accumulatedDistance = 0;
+      lastInstructionIndex = i;
+    }
+  }
+
+  // Destination instruction with proper distance
+  const destCoord = Array.isArray(coordinates[coordinates.length - 1]) ? 
+    coordinates[coordinates.length - 1] : 
+    [coordinates[coordinates.length - 1].lat, coordinates[coordinates.length - 1].lng];
+    
+  instructions.push({
+    point: destCoord,
+    text: 'You have reached your destination',
+    type: 'arrive',
+    distance: totalDistance,
+    isDestination: true
+  });
+
+  console.log('Generated', instructions.length, 'instructions:', instructions);
+  return instructions;
+};
 const RealTimeNavigation = ({ 
   isActive, 
   onStopNavigation, 
@@ -415,11 +652,105 @@ const RealTimeNavigation = ({
   const previousPositionRef = useRef(null);
   const instructionCheckRef = useRef(null);
   const [currentHeading, setCurrentHeading] = useState(0);
-  const [nextInstruction, setNextInstruction] = useState('Starting navigation...');
-  const [distanceToNext, setDistanceToNext] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
   
+  // Store instructions locally to avoid regeneration on every position update
+  const [routeInstructions, setRouteInstructions] = useState([]);
+  const [routeProgress, setRouteProgress] = useState({
+    distanceLeft: 0,
+    timeRemaining: 0,
+    progressPercentage: 0
+  });
+
+  // Calculate total route distance from coordinates
+  const calculateTotalRouteDistance = useCallback((coordinates) => {
+    if (!coordinates || coordinates.length < 2) return 0;
+    
+    let total = 0;
+    for (let i = 0; i < coordinates.length - 1; i++) {
+      const current = Array.isArray(coordinates[i]) ? coordinates[i] : [coordinates[i].lat, coordinates[i].lng];
+      const next = Array.isArray(coordinates[i + 1]) ? coordinates[i + 1] : [coordinates[i + 1].lat, coordinates[i + 1].lng];
+      total += getDistanceFromLatLng(current[0], current[1], next[0], next[1]);
+    }
+    return total;
+  }, []);
+
+  // Calculate estimated time based on distance (in seconds)
+  const calculateEstimatedTime = useCallback((distance) => {
+    // Assume average speed of 40 km/h for driving
+    const averageSpeedKmh = 40;
+    const averageSpeedMs = (averageSpeedKmh * 1000) / 3600; // Convert to m/s
+    return Math.max(0, distance / averageSpeedMs);
+  }, []);
+
+  // Calculate remaining route from current position to destination
+  const calculateRemainingRoute = useCallback((currentPosition, coordinates) => {
+    if (!coordinates || coordinates.length < 2) return { distance: 0, time: 0 };
+    
+    let remainingDistance = 0;
+    let closestIndex = 0;
+    let minDistance = Infinity;
+    
+    // Find the closest point on the route to current position
+    for (let i = 0; i < coordinates.length; i++) {
+      const point = Array.isArray(coordinates[i]) ? coordinates[i] : [coordinates[i].lat, coordinates[i].lng];
+      const distance = getDistanceFromLatLng(
+        currentPosition.lat, currentPosition.lng,
+        point[0], point[1]
+      );
+      
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = i;
+      }
+    }
+    
+    // Calculate distance from closest point to destination
+    for (let i = closestIndex; i < coordinates.length - 1; i++) {
+      const current = Array.isArray(coordinates[i]) ? coordinates[i] : [coordinates[i].lat, coordinates[i].lng];
+      const next = Array.isArray(coordinates[i + 1]) ? coordinates[i + 1] : [coordinates[i + 1].lat, coordinates[i + 1].lng];
+      remainingDistance += getDistanceFromLatLng(current[0], current[1], next[0], next[1]);
+    }
+    
+    // Add distance from current position to the closest route point
+    remainingDistance += minDistance;
+    
+    const remainingTime = calculateEstimatedTime(remainingDistance);
+    
+    return {
+      distance: remainingDistance,
+      time: remainingTime
+    };
+  }, [calculateEstimatedTime]);
+
+  // Generate instructions when route changes
+  useEffect(() => {
+    if (selectedRoute?.coordinates) {
+      console.log('Generating instructions for new route...');
+      const instructions = selectedRoute.instructions || 
+                         generateInstructionsFromCoordinates(selectedRoute.coordinates);
+      setRouteInstructions(instructions);
+      console.log('Instructions generated:', instructions.length);
+      
+      // Calculate initial route stats
+      const totalDistance = selectedRoute.summary?.totalDistance || 
+                           calculateTotalRouteDistance(selectedRoute.coordinates);
+      const totalTime = selectedRoute.summary?.totalTime || 
+                       calculateEstimatedTime(totalDistance);
+      
+      setRouteProgress({
+        distanceLeft: totalDistance,
+        timeRemaining: totalTime,
+        progressPercentage: 0
+      });
+      
+      // Send initial instruction to parent
+      if (instructions.length > 0 && onInstructionUpdate) {
+        onInstructionUpdate(instructions[0].text, 0, totalDistance, totalTime);
+      }
+    }
+  }, [selectedRoute, onInstructionUpdate, calculateTotalRouteDistance, calculateEstimatedTime]);
 
   const calculateHeading = (from, to) => {
     const fromLat = from.lat * Math.PI / 180;
@@ -434,114 +765,40 @@ const RealTimeNavigation = ({
     return (heading + 360) % 360;
   };
 
-  const calculateBearing = (point1, point2) => {
-    const lat1 = point1[0] * Math.PI / 180;
-    const lat2 = point2[0] * Math.PI / 180;
-    const lng1 = point1[1] * Math.PI / 180;
-    const lng2 = point2[1] * Math.PI / 180;
-    
-    const y = Math.sin(lng2 - lng1) * Math.cos(lat2);
-    const x = Math.cos(lat1) * Math.sin(lat2) - 
-              Math.sin(lat1) * Math.cos(lat2) * Math.cos(lng2 - lng1);
-    const bearing = Math.atan2(y, x) * 180 / Math.PI;
-    return (bearing + 360) % 360;
-  };
-
-  const generateInstructionsFromCoordinates = (coordinates) => {
-    if (!coordinates || coordinates.length < 2) return [];
-    
-    const instructions = [];
-    
-    instructions.push({
-      point: coordinates[0],
-      text: 'Start navigation and follow the route',
-      type: 'depart',
-      distance: 0,
-      isStart: true
-    });
-
-    const totalDistance = getDistanceFromLatLng(
-      coordinates[0][0], coordinates[0][1],
-      coordinates[coordinates.length - 1][0], coordinates[coordinates.length - 1][1]
-    );
-
-    let accumulatedDistance = 0;
-    
-    for (let i = 1; i < coordinates.length - 1; i++) {
-      const prev = coordinates[i - 1];
-      const curr = coordinates[i];
-      const next = coordinates[i + 1];
-      
-      const segmentDistance = getDistanceFromLatLng(prev[0], prev[1], curr[0], curr[1]);
-      accumulatedDistance += segmentDistance;
-      
-      const bearing1 = calculateBearing(prev, curr);
-      const bearing2 = calculateBearing(curr, next);
-      const angleDiff = Math.abs(bearing2 - bearing1);
-      
-      const shouldAddInstruction = angleDiff > 45 || 
-                                  accumulatedDistance > 500 || 
-                                  i % 20 === 0;
-
-      if (shouldAddInstruction) {
-        let instructionType = 'continue';
-        let instructionText = 'Continue straight';
-        
-        if (angleDiff > 45 && angleDiff < 135) {
-          if (bearing2 > bearing1) {
-            instructionType = 'turn right';
-            instructionText = 'Turn right';
-          } else {
-            instructionType = 'turn left';
-            instructionText = 'Turn left';
-          }
-        } else if (angleDiff >= 135) {
-          instructionType = 'uturn';
-          instructionText = 'Make a U-turn';
-        } else if (accumulatedDistance > 500) {
-          instructionText = `Continue for ${Math.round(accumulatedDistance / 100) / 10} km`;
-        }
-
-        instructions.push({
-          point: curr,
-          text: instructionText,
-          type: instructionType,
-          distance: accumulatedDistance,
-          isIntermediate: true
-        });
-        
-        accumulatedDistance = 0;
-      }
+  const updateNavigationInstructions = (currentPosition) => {
+    if (routeInstructions.length === 0 || !selectedRoute?.coordinates) {
+      console.log('No instructions or coordinates available yet');
+      return;
     }
 
-    instructions.push({
-      point: coordinates[coordinates.length - 1],
-      text: 'You have reached your destination',
-      type: 'arrive',
-      distance: totalDistance,
-      isDestination: true
+    console.log('Updating navigation with', routeInstructions.length, 'instructions');
+    console.log("instructions:", routeInstructions);
+    console.log('Voice enabled:', voiceEnabled);
+
+    // Calculate real-time progress
+    const remaining = calculateRemainingRoute(currentPosition, selectedRoute.coordinates);
+    const totalDistance = selectedRoute.summary?.totalDistance || 
+                         calculateTotalRouteDistance(selectedRoute.coordinates);
+    const progressPercentage = totalDistance > 0 ? 
+                              Math.max(0, Math.min(100, ((totalDistance - remaining.distance) / totalDistance) * 100)) : 0;
+
+    setRouteProgress({
+      distanceLeft: remaining.distance,
+      timeRemaining: remaining.time,
+      progressPercentage: progressPercentage
     });
-
-    return instructions;
-  };
-
-  const updateNavigationInstructions = (currentPosition) => {
-    if (!selectedRoute?.coordinates) return;
-
-    const instructions = selectedRoute.instructions || 
-                       generateInstructionsFromCoordinates(selectedRoute.coordinates);
-
-    if (instructions.length === 0) return;
 
     let closestStep = 0;
     let minDistance = Infinity;
 
-    for (let i = 0; i < instructions.length; i++) {
-      const instruction = instructions[i];
+    // Find the closest instruction point
+    for (let i = 0; i < routeInstructions.length; i++) {
+      const instruction = routeInstructions[i];
+      const instructionPoint = instruction.point;
+      
       const distance = getDistanceFromLatLng(
         currentPosition.lat, currentPosition.lng,
-        instruction.point[0] || instruction.point.lat,
-        instruction.point[1] || instruction.point.lng
+        instructionPoint[0], instructionPoint[1]
       );
 
       if (distance < minDistance) {
@@ -550,69 +807,96 @@ const RealTimeNavigation = ({
       }
     }
 
-    if (closestStep === instructions.length - 1 && minDistance > 100) {
-      closestStep = Math.max(0, instructions.length - 2);
+    // Don't jump to destination too early
+    if (closestStep === routeInstructions.length - 1 && minDistance > 100) {
+      closestStep = Math.max(0, routeInstructions.length - 2);
     }
 
     setCurrentStep(closestStep);
 
+    // Determine next instruction to display
     let nextStep = null;
-    if (closestStep < instructions.length - 1) {
-      nextStep = instructions[closestStep + 1];
-      
-      if (nextStep.isDestination && minDistance > 50) {
-        nextStep = instructions[closestStep];
-      }
-    } else {
-      nextStep = instructions[closestStep];
-    }
+    let distanceToNextStep = 0;
 
-    if (nextStep) {
-      const distanceToNextStep = getDistanceFromLatLng(
+    if (closestStep < routeInstructions.length - 1) {
+      nextStep = routeInstructions[closestStep + 1];
+      const nextStepPoint = nextStep.point;
+      
+      distanceToNextStep = getDistanceFromLatLng(
         currentPosition.lat, currentPosition.lng,
-        nextStep.point[0] || nextStep.point.lat,
-        nextStep.point[1] || nextStep.point.lng
+        nextStepPoint[0], nextStepPoint[1]
       );
 
-      // Update local state
-      setDistanceToNext(distanceToNextStep);
-      setNextInstruction(nextStep.text);
-
-      // Call the callback to update parent component (NavigationPanel)
-      if (onInstructionUpdate) {
-        onInstructionUpdate(nextStep.text, distanceToNextStep);
+      // If we're very close to destination, show arrival instruction
+      if (nextStep.isDestination && distanceToNextStep < 50) {
+        nextStep = routeInstructions[routeInstructions.length - 1];
       }
+    } else {
+      // We're at the last instruction (destination)
+      nextStep = routeInstructions[closestStep];
+      distanceToNextStep = minDistance;
+    }
 
+    if (nextStep && onInstructionUpdate) {
+      console.log('Updating instruction:', nextStep.text, 'Distance to next:', distanceToNextStep);
+      console.log('Route progress - Distance left:', Math.round(remaining.distance), 'm, Time remaining:', Math.round(remaining.time), 's');
+      
+      // Update parent component with current instruction and progress
+      onInstructionUpdate(
+        nextStep.text, 
+        distanceToNextStep, 
+        remaining.distance, 
+        remaining.time
+      );
+
+      // ENHANCED VOICE INSTRUCTION LOGIC
       if (voiceEnabled && !nextStep.isStart) {
+        console.log('Voice enabled, checking if should speak...');
+        
         if (nextStep.isDestination) {
           if (distanceToNextStep < 25) {
-            voiceService.speak('You have arrived at your destination');
+            console.log('Speaking arrival instruction');
+            voiceService.speak('You have arrived at your destination', true);
           }
         } 
-        else if (distanceToNextStep < 150) {
-          const proximityInstruction = NavigationInstructionGenerator.getProximityInstruction(
-            distanceToNextStep, 
-            nextStep.type
-          );
-          
-          if (proximityInstruction && distanceToNextStep < 80) {
-            voiceService.speak(proximityInstruction);
+        else {
+          // Speak proximity warnings
+          if (distanceToNextStep < 80) {
+            const proximityInstruction = NavigationInstructionGenerator.getProximityInstruction(
+              distanceToNextStep, 
+              nextStep.type
+            );
+            
+            if (proximityInstruction) {
+              console.log('Speaking proximity instruction:', proximityInstruction);
+              voiceService.speak(proximityInstruction);
+            }
           }
 
-          if (distanceToNextStep < 100) {
+          // Speak main instructions for turns and maneuvers
+          if (distanceToNextStep < 150 && 
+              (nextStep.type.includes('turn') || 
+               nextStep.type.includes('merge') || 
+               nextStep.type.includes('roundabout') ||
+               nextStep.type.includes('fork'))) {
+            
             const voiceInstruction = NavigationInstructionGenerator.getInstruction(
               nextStep.type,
               distanceToNextStep,
-              nextStep.text
+              '' // Road name if available
             );
+            
+            console.log('Speaking main instruction:', voiceInstruction);
             voiceService.speak(voiceInstruction);
           }
         }
       }
 
+      // Mark navigation as started
       if (!hasStarted && !nextStep.isStart && distanceToNextStep < 1000) {
         setHasStarted(true);
         if (voiceEnabled) {
+          console.log('Navigation started, speaking welcome message');
           voiceService.speak('Navigation started. Follow the route.');
         }
       }
@@ -637,6 +921,8 @@ const RealTimeNavigation = ({
 
   useEffect(() => {
     if (!isActive) {
+      console.log('RealTimeNavigation deactivating...');
+      
       if (watchIdRef.current) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
@@ -649,43 +935,62 @@ const RealTimeNavigation = ({
         map.removeLayer(markerRef.current);
         markerRef.current = null;
       }
+      
       voiceService.cancel();
       previousPositionRef.current = null;
       setCurrentStep(0);
-      setNextInstruction('Starting navigation...');
-      setDistanceToNext(0);
       setHasStarted(false);
+      setRouteInstructions([]);
+      setRouteProgress({
+        distanceLeft: 0,
+        timeRemaining: 0,
+        progressPercentage: 0
+      });
       
       // Notify parent that navigation has stopped
       if (onInstructionUpdate) {
-        onInstructionUpdate('Navigation ended', 0);
+        onInstructionUpdate('Navigation ended', 0, 0, 0);
       }
       return;
     }
 
+    console.log('RealTimeNavigation activating...');
+
+    // Create navigation marker
     const initialIcon = createNavigationIcon(navigationIconType, currentHeading);
     markerRef.current = L.marker([0, 0], { 
       icon: initialIcon,
       zIndexOffset: 1000
     }).addTo(map);
 
-    setNextInstruction('Starting navigation... Follow the route.');
+    // Calculate initial progress if we have a route
+    let initialDistanceLeft = 0;
+    let initialTimeRemaining = 0;
     
-    // Notify parent about initial instruction
+    if (selectedRoute?.coordinates) {
+      const totalDistance = selectedRoute.summary?.totalDistance || 
+                           calculateTotalRouteDistance(selectedRoute.coordinates);
+      initialDistanceLeft = totalDistance;
+      initialTimeRemaining = selectedRoute.summary?.totalTime || calculateEstimatedTime(totalDistance);
+    }
+
+    // Set initial instruction
     if (onInstructionUpdate) {
-      onInstructionUpdate('Starting navigation... Follow the route.', 0);
+      onInstructionUpdate('Starting navigation... Follow the route.', 0, initialDistanceLeft, initialTimeRemaining);
     }
     
     if (voiceEnabled) {
       voiceService.speak('Navigation starting. Please follow the route.');
     }
 
+    // Set up instruction checking interval
     instructionCheckRef.current = setInterval(() => {
-      if (previousPositionRef.current && selectedRoute) {
+      if (previousPositionRef.current && routeInstructions.length > 0 && selectedRoute?.coordinates) {
         updateNavigationInstructions(previousPositionRef.current);
       }
     }, 2000);
 
+    // Set up geolocation watcher
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
         const newPosition = {
@@ -696,6 +1001,8 @@ const RealTimeNavigation = ({
           speed: position.coords.speed
         };
 
+        console.log('New position:', newPosition.lat.toFixed(6), newPosition.lng.toFixed(6));
+
         let heading = newPosition.heading;
         if ((heading === null || heading === undefined) && previousPositionRef.current) {
           heading = calculateHeading(previousPositionRef.current, newPosition);
@@ -705,14 +1012,21 @@ const RealTimeNavigation = ({
           smoothRotate(heading);
         }
 
+        // Update marker position
         if (markerRef.current) {
           markerRef.current.setLatLng([newPosition.lat, newPosition.lng]);
         }
 
+        // Center map on user
         map.flyTo([newPosition.lat, newPosition.lng], 16, {
           duration: 1,
           easeLinearity: 0.25
         });
+
+        // Update instructions based on new position
+        if (routeInstructions.length > 0 && selectedRoute?.coordinates) {
+          updateNavigationInstructions(newPosition);
+        }
 
         previousPositionRef.current = newPosition;
       },
@@ -728,6 +1042,7 @@ const RealTimeNavigation = ({
     );
 
     return () => {
+      console.log('RealTimeNavigation cleanup');
       if (watchIdRef.current) {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
@@ -739,13 +1054,23 @@ const RealTimeNavigation = ({
       }
       voiceService.cancel();
     };
-  }, [isActive, map, navigationIconType, onStopNavigation, selectedRoute, voiceEnabled, onInstructionUpdate]);
+  }, [
+    isActive, 
+    map, 
+    navigationIconType, 
+    onStopNavigation, 
+    routeInstructions, 
+    voiceEnabled, 
+    onInstructionUpdate, 
+    selectedRoute,
+    calculateTotalRouteDistance,
+    calculateEstimatedTime
+  ]);
 
   useEffect(() => {
     updateMarkerRotation();
   }, [currentHeading, navigationIconType]);
 
-  // Return null since we're now using NavigationPanel for displaying instructions
   return null;
 };
 
@@ -768,30 +1093,25 @@ const RoutingMachine = ({
   const routeLayersRef = useRef([]);
   const [previousSelectedIndex, setPreviousSelectedIndex] = useState(null);
 
-  const extractInstructionsFromRoute = (route) => {
-    if (!route) return [];
-    
-    const instructions = [];
-    
-    if (route.legs && route.legs[0] && route.legs[0].steps) {
-      route.legs[0].steps.forEach((step, index) => {
-        if (step.maneuver) {
-          instructions.push({
-            point: [step.maneuver.location[1], step.maneuver.location[0]],
-            text: step.maneuver.instruction || `Step ${index + 1}`,
-            type: step.maneuver.type || 'continue',
-            distance: step.distance || 0
-          });
-        }
-      });
-    }
-    
-    if (instructions.length === 0 && route.coordinates) {
-      console.log('No OSRM instructions found, will generate from coordinates');
-    }
-    
-    return instructions;
-  };
+ const extractInstructionsFromRoute = (route) => {
+  if (!route?.coordinates) {
+    console.log('No route coordinates available');
+    return [];
+  }
+
+  console.log('Route has', route.coordinates.length, 'coordinates, generating instructions...');
+  
+  // Always generate from coordinates since OSRM returns empty instructions
+  const instructions = generateInstructionsFromCoordinates(route.coordinates);
+  
+  console.log('Generated', instructions.length, 'instructions from coordinates');
+  
+  if (instructions.length === 0) {
+    console.warn('No instructions generated from coordinates!');
+  }
+  
+  return instructions;
+};
 
   // Cleanup function
   const cleanup = useCallback(() => {
@@ -1352,10 +1672,9 @@ const getSafetyLabel = (score) => {
   return { text: 'High Risk', color: 'text-red-500' };
 };
 
-// Main Map Component
-// Main Map Component
+// Main Map Component with Dynamic User Location
 const Map = ({ startPoint, endPoint }) => {
-  const [userLocation, setUserLocation] = useState([28.6139, 77.209]);
+  const [userLocation, setUserLocation] = useState(null);
   const [reports, setReports] = useState([]);
   const [routeSafetyInfo, setRouteSafetyInfo] = useState([]);
   const [panelVisible, setPanelVisible] = useState(true);
@@ -1365,51 +1684,133 @@ const Map = ({ startPoint, endPoint }) => {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [nextInstruction, setNextInstruction] = useState('Starting navigation...');
   const [distanceToNext, setDistanceToNext] = useState(0);
+  const [distanceLeft, setDistanceLeft] = useState(0);
+  const [timeRemaining, setTimeRemaining] = useState(0);
   const [navigationStopped, setNavigationStopped] = useState(false);
   const [mapKey, setMapKey] = useState(0);
-
-  // Clear routes when start/end points change
+  const [locationLoaded, setLocationLoaded] = useState(false);
+  const [locationError, setLocationError] = useState(null);
+const [shouldShowRoutes, setShouldShowRoutes] = useState(true);
+  // Get user's actual location
   useEffect(() => {
-    console.log('Start/end points changed, clearing routes...', { startPoint, endPoint });
-    setRouteSafetyInfo([]);
-    setSelectedRouteIndex(0);
-    setIsNavigating(false);
+  // Dispatch event when navigation state changes
+  const event = new CustomEvent('navigationStateChange', {
+    detail: { isNavigating }
+  });
+  window.dispatchEvent(event);
+}, [isNavigating]);
+  useEffect(() => {
+  if (startPoint && endPoint) {
+    console.log('Start/end points changed, resetting route display');
+    setShouldShowRoutes(true);
     setNavigationStopped(false);
-    setPanelVisible(true);
-    setNextInstruction('Starting navigation...');
-    setDistanceToNext(0);
+  }
+}, [startPoint, endPoint]);
+  useEffect(() => {
+    const getUserLocation = () => {
+      if (!navigator.geolocation) {
+        const error = 'Geolocation is not supported by this browser';
+        console.warn(error);
+        setLocationError(error);
+        setUserLocation([0, 0]); // Default fallback
+        setLocationLoaded(true);
+        return;
+      }
+
+      console.log('Getting user location...');
+      
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userPos = [position.coords.latitude, position.coords.longitude];
+          console.log('User location found:', userPos);
+          setUserLocation(userPos);
+          setLocationLoaded(true);
+          setLocationError(null);
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+          let errorMessage = '';
+          let fallbackLocation;
+          
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = 'Location access denied. Using default location.';
+              fallbackLocation = [40.7128, -74.0060]; // New York
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = 'Location unavailable. Using default location.';
+              fallbackLocation = [51.5074, -0.1278]; // London
+              break;
+            case error.TIMEOUT:
+              errorMessage = 'Location request timed out. Using default location.';
+              fallbackLocation = [48.8566, 2.3522]; // Paris
+              break;
+            default:
+              errorMessage = 'Unknown location error. Using default location.';
+              fallbackLocation = [35.6762, 139.6503]; // Tokyo
+              break;
+          }
+          
+          setLocationError(errorMessage);
+          setUserLocation(fallbackLocation);
+          setLocationLoaded(true);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 60000
+        }
+      );
+    };
+
+    getUserLocation();
+  }, []);
+
+//  // Clear routes only when start/end points actually change
+// useEffect(() => {
+//   // Only clear routes if we have new start/end points that are different from current
+//   const shouldClearRoutes = startPoint && endPoint && 
+//     (routeSafetyInfo.length > 0 || isNavigating);
+  
+//   if (shouldClearRoutes) {
+//     console.log('Clearing routes due to start/end point change');
+//     setRouteSafetyInfo([]);
+//     setSelectedRouteIndex(0);
+//     setIsNavigating(false);
+//     setNavigationStopped(false);
+//     setPanelVisible(true);
+//     setNextInstruction('Starting navigation...');
+//     setDistanceToNext(0);
+//     setDistanceLeft(0);
+//     setTimeRemaining(0);
     
-    // Force map re-render by changing key
-    setMapKey(prev => prev + 1);
-  }, [startPoint, endPoint]);
+//     setMapKey(prev => prev + 1);
+//   }
+// }, [startPoint, endPoint]); // Remove other dependencies that cause unnecessary re-renders
 
   // Handle routes computed
-  const handleRoutesComputed = useCallback((routes) => {
-    console.log('Routes computed in parent:', routes.length);
-    setRouteSafetyInfo(routes);
-    
-    if (routes.length > 0) {
-      setNavigationStopped(false);
+const handleRoutesComputed = useCallback((routes) => {
+  setRouteSafetyInfo(routes);
+  setShouldShowRoutes(true); // Add this line - show routes when new ones are computed
+  
+  if (routes.length > 0) {
+    setNavigationStopped(false);
+    const selectedRoute = routes[selectedRouteIndex];
+    if (selectedRoute) {
+      setDistanceLeft(selectedRoute.summary?.totalDistance || 0);
+      setTimeRemaining(selectedRoute.summary?.totalTime || 0);
     }
-  }, []);
+  }
+}, [selectedRouteIndex]);
 
+  // Update progress when route selection changes
   useEffect(() => {
-    // Dispatch custom event when navigation state changes
-    const event = new CustomEvent('navigationStateChange', {
-      detail: { isNavigating }
-    });
-    window.dispatchEvent(event);
-  }, [isNavigating]);
-
-  useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserLocation([pos.coords.latitude, pos.coords.longitude]);
-      },
-      (err) => console.error(err),
-      { enableHighAccuracy: true }
-    );
-  }, []);
+    if (routeSafetyInfo.length > 0 && routeSafetyInfo[selectedRouteIndex]) {
+      const selectedRoute = routeSafetyInfo[selectedRouteIndex];
+      setDistanceLeft(selectedRoute.summary?.totalDistance || 0);
+      setTimeRemaining(selectedRoute.summary?.totalTime || 0);
+    }
+  }, [selectedRouteIndex, routeSafetyInfo]);
 
   useEffect(() => {
     let ignore = false;
@@ -1435,8 +1836,6 @@ const Map = ({ startPoint, endPoint }) => {
   const handleStartNavigation = () => {
     if (voiceEnabled && voiceService.isSupported()) {
       voiceService.speak('Starting navigation. Please follow the route.');
-    } else if (voiceEnabled) {
-      console.warn('Voice synthesis not supported in this browser');
     }
     
     setIsNavigating(true);
@@ -1444,17 +1843,27 @@ const Map = ({ startPoint, endPoint }) => {
     setNavigationStopped(false);
   };
 
-  const handleStopNavigation = () => {
-    if (voiceEnabled) {
-      voiceService.speak('Navigation ended.');
-    }
-    voiceService.cancel();
-    setIsNavigating(false);
-    setPanelVisible(true);
-    setNavigationStopped(true);
-    setNextInstruction('Navigation ended');
-    setDistanceToNext(0);
-  };
+const handleStopNavigation = () => {
+  if (voiceEnabled) {
+    voiceService.speak('Navigation ended.');
+  }
+  voiceService.cancel();
+  setIsNavigating(false);
+  setPanelVisible(true);
+  setNavigationStopped(true);
+  setNextInstruction('Navigation ended');
+  setDistanceToNext(0);
+  setDistanceLeft(0);
+  setTimeRemaining(0);
+  
+  // Clear routes when stopping navigation
+  setRouteSafetyInfo([]);
+  setSelectedRouteIndex(0);
+  setShouldShowRoutes(false); // Add this line
+  
+  // Force complete map refresh to remove all route layers
+  setMapKey(prev => prev + 1);
+};
 
   const handleVoiceToggle = () => {
     const newVoiceEnabled = !voiceEnabled;
@@ -1466,56 +1875,143 @@ const Map = ({ startPoint, endPoint }) => {
     }
   };
 
+  // Enhanced instruction update handler with progress data
+  const handleInstructionUpdate = useCallback((instruction, distance, newDistanceLeft = 0, newTimeRemaining = 0) => {
+    setNextInstruction(instruction);
+    setDistanceToNext(distance);
+    
+    if (newDistanceLeft >= 0) {
+      setDistanceLeft(newDistanceLeft);
+    }
+    if (newTimeRemaining >= 0) {
+      setTimeRemaining(newTimeRemaining);
+    }
+  }, []);
+
   const selectedRoute = routeSafetyInfo[selectedRouteIndex]?.route;
+
+  // Retry location function
+  const retryLocation = () => {
+    setLocationLoaded(false);
+    setLocationError(null);
+    
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation not supported');
+      setLocationLoaded(true);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const userPos = [position.coords.latitude, position.coords.longitude];
+        setUserLocation(userPos);
+        setLocationLoaded(true);
+        setLocationError(null);
+      },
+      (error) => {
+        setLocationError('Failed to get location. Please check permissions.');
+        setLocationLoaded(true);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
 
   return (
     <div className="relative w-full h-full bg-[#1E1E1E]">
-      <MapContainer
-        key={mapKey} // Force re-render when key changes
-        center={userLocation}
-        zoom={13}
-        className="h-[calc(100vh-4rem)] w-full z-0"
-        preferCanvas={true}
-        style={{ background: '#111' }}
-      >
-        <TileLayer
-          attribution='&copy; OpenStreetMap contributors'
-          url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
-        />
-
-        <UserLocationMarker position={userLocation} isNavigating={isNavigating} />
-
-        <ClusteredReportsLayer reports={reports} />
-
-        {startPoint && <Marker position={[startPoint.lat, startPoint.lng]} icon={blueIcon}><Popup className="dark-popup">Start Point</Popup></Marker>}
-        {endPoint && <Marker position={[endPoint.lat, endPoint.lng]} icon={redIcon}><Popup className="dark-popup">End Point</Popup></Marker>}
-
-        {startPoint && endPoint && (
-          <RoutingMachine
-            startPoint={startPoint}
-            endPoint={endPoint}
-            reports={reports}
-            onRoutesComputed={handleRoutesComputed}
-            selectedRouteIndex={selectedRouteIndex}
-            onRouteChange={setSelectedRouteIndex}
-            isNavigating={isNavigating}
+      {!locationLoaded ? (
+        // Loading state
+        <div className="flex items-center justify-center h-full text-white">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-lg font-medium">Getting your location...</p>
+            <p className="text-sm text-gray-400 mt-2">Please allow location access for accurate navigation</p>
+          </div>
+        </div>
+      ) : locationError ? (
+        // Error state
+        <div className="flex items-center justify-center h-full text-white">
+          <div className="text-center max-w-md p-6 bg-gray-800 rounded-lg">
+            <div className="text-yellow-500 text-4xl mb-4">📍</div>
+            <h3 className="text-lg font-medium mb-2">Location Access Needed</h3>
+            <p className="text-gray-300 mb-4">{locationError}</p>
+            <div className="space-y-3">
+              <button
+                onClick={retryLocation}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded transition-colors"
+              >
+                Retry Location
+              </button>
+              <button
+                onClick={() => {
+                  setLocationError(null);
+                  setUserLocation([40.7128, -74.0060]); // Continue with fallback
+                }}
+                className="w-full bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition-colors"
+              >
+                Use Default Location
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : userLocation ? (
+        // Map with user location
+        <MapContainer
+          key={mapKey}
+          center={userLocation}
+          zoom={13}
+          className="h-[calc(100vh-4rem)] w-full z-0"
+          preferCanvas={true}
+          style={{ background: '#111' }}
+        >
+          <TileLayer
+            attribution='&copy; OpenStreetMap contributors'
+            url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
           />
-        )}
 
-        {isNavigating && (
-          <RealTimeNavigation
-            isActive={isNavigating}
-            onStopNavigation={handleStopNavigation}
-            selectedRoute={selectedRoute}
-            navigationIconType={navigationIconType}
-            voiceEnabled={voiceEnabled}
-            onInstructionUpdate={(instruction, distance) => {
-              setNextInstruction(instruction);
-              setDistanceToNext(distance);
-            }}
-          />
-        )}
-      </MapContainer>
+          <UserLocationMarker position={userLocation} isNavigating={isNavigating} />
+
+          <ClusteredReportsLayer reports={reports} />
+
+          {startPoint && endPoint && shouldShowRoutes && (
+              <>
+                <Marker position={[startPoint.lat, startPoint.lng]} icon={blueIcon}>
+                  <Popup className="dark-popup">Start Point</Popup>
+                </Marker>
+                
+                <Marker position={[endPoint.lat, endPoint.lng]} icon={redIcon}>
+                  <Popup className="dark-popup">End Point</Popup>
+                </Marker>
+              </>
+            )}
+
+          {startPoint && endPoint && shouldShowRoutes && (
+            <RoutingMachine
+              startPoint={startPoint}
+              endPoint={endPoint}
+              reports={reports}
+              onRoutesComputed={handleRoutesComputed}
+              selectedRouteIndex={selectedRouteIndex}
+              onRouteChange={setSelectedRouteIndex}
+              isNavigating={isNavigating}
+            />
+          )}
+
+          {isNavigating && (
+            <RealTimeNavigation
+              isActive={isNavigating}
+              onStopNavigation={handleStopNavigation}
+              selectedRoute={selectedRoute}
+              navigationIconType={navigationIconType}
+              voiceEnabled={voiceEnabled}
+              onInstructionUpdate={handleInstructionUpdate}
+            />
+          )}
+        </MapContainer>
+      ) : null}
 
       {routeSafetyInfo.length > 0 && (
         <RouteSafetyPanel
@@ -1548,6 +2044,8 @@ const Map = ({ startPoint, endPoint }) => {
               onVoiceToggle={handleVoiceToggle}
               nextInstruction={nextInstruction}
               distanceToNext={distanceToNext}
+              distanceLeft={distanceLeft}
+              timeRemaining={timeRemaining}
             />
           )}
         </>
