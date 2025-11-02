@@ -12,7 +12,7 @@ import 'leaflet-routing-machine';
 import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 import 'leaflet.heat';
 import { FaLocationArrow, FaCar, FaPlay, FaStop, FaVolumeUp, FaVolumeMute } from 'react-icons/fa';
-const base_url = import.meta.env.REACT_APP_API_URL || "http://localhost:5000";
+const base_url = import.meta.env.VITE_API_URL || "http://localhost:5000";
 // Default Marker Fix
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({

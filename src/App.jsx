@@ -21,7 +21,7 @@ function Home() {
   const [isPlanningRoute, setIsPlanningRoute] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false); // New state for mobile report form
-const base_url = import.meta.env.REACT_APP_API_URL || "http://localhost:5000";
+const base_url = import.meta.env.VITE_API_URL || "http://localhost:5000";
   useEffect(() => {
     fetch(`${base_url}/api/reportsDetails`)
       .then(res => res.json())

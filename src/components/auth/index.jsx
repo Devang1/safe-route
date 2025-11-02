@@ -23,7 +23,7 @@ const Auth = () => {
   const [sosContacts, setSosContacts] = useState([""]);
 
   const navigate = useNavigate();
-  const base_url = import.meta.env.REACT_APP_API_URL || "http://localhost:5000";
+  const base_url = import.meta.env.VITE_API_URL || "http://localhost:5000";
   // ======= TOAST HELPERS =======
   const passnotmatch = () =>
     toast.error("Both passwords are not same!", {

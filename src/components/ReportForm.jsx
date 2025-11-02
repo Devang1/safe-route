@@ -10,7 +10,7 @@ import {
 } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-const base_url = import.meta.env.REACT_APP_API_URL || "http://localhost:5000";
+const base_url = import.meta.env.VITE_API_URL || "http://localhost:5000";
 // Fix default marker icons
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({

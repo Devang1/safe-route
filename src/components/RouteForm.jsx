@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Navigation, MapPin, Locate, RouteIcon, ChevronDown, ChevronUp, Search } from 'lucide-react';
-const base_url = import.meta.env.REACT_APP_API_URL || "http://localhost:5000";
+const base_url = import.meta.env.VITE_API_URL || "http://localhost:5000";
 export const RouteForm = ({
   onRouteSubmit,
   useCurrentLocation,
