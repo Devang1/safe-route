@@ -21,7 +21,7 @@ function Home() {
   const [isPlanningRoute, setIsPlanningRoute] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false); // New state for mobile report form
-const base_url = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const base_url = import.meta.env.REACT_APP_API_URL || "http://localhost:5000";
   useEffect(() => {
     fetch(`${base_url}/api/reportsDetails`)
       .then(res => res.json())
@@ -38,20 +38,20 @@ const base_url = import.meta.env.VITE_API_URL || "http://localhost:5000";
     setUserEmail(localStorage.getItem("email"));
   }, []);
   // Add this useEffect to your Home component
-useEffect(() => {
-  const handleRouteFromChatbot = (event) => {
-    const { start, end, placeName } = event.detail;
-    setRoutePoints({ start, end });
-    setIsPlanningRoute(false);
-    toast.success(`Route set to: ${placeName}`);
-  };
+  useEffect(() => {
+    const handleRouteFromChatbot = (event) => {
+      const { start, end, placeName } = event.detail;
+      setRoutePoints({ start, end });
+      setIsPlanningRoute(false);
+      toast.success(`Route set to: ${placeName}`);
+    };
 
-  window.addEventListener('setRouteFromChatbot', handleRouteFromChatbot);
-  
-  return () => {
-    window.removeEventListener('setRouteFromChatbot', handleRouteFromChatbot);
-  };
-}, []);
+    window.addEventListener('setRouteFromChatbot', handleRouteFromChatbot);
+
+    return () => {
+      window.removeEventListener('setRouteFromChatbot', handleRouteFromChatbot);
+    };
+  }, []);
   // Listen for navigation state changes from the Map component
   useEffect(() => {
     const handleNavigationStateChange = (event) => {
@@ -59,7 +59,7 @@ useEffect(() => {
     };
 
     window.addEventListener('navigationStateChange', handleNavigationStateChange);
-    
+
     return () => {
       window.removeEventListener('navigationStateChange', handleNavigationStateChange);
     };
@@ -82,7 +82,7 @@ useEffect(() => {
     setRoutePoints({});
     setIsPlanningRoute(false);
   };
-  
+
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("email");
@@ -138,7 +138,7 @@ useEffect(() => {
     }
 
     const token = localStorage.getItem("token");
-    const email = localStorage.getItem("email"); 
+    const email = localStorage.getItem("email");
 
     if (!token || !email) {
       toast.error("Please log in to use SOS feature.");
@@ -211,9 +211,48 @@ useEffect(() => {
     setShowReportForm(false);
   };
 
+  // Called after user clicks upvote/downvote
+  const handleVote = async (reportId, type) => {
+    try {
+      console.log("handleVote called with:", { reportId, type });
+      const res = await fetch(`${base_url}/api/vote`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, reportId }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        // ✅ Update UI instantly
+        setReports(prevReports =>
+          prevReports.map(report =>
+            report.id === reportId
+              ? {
+                ...report,
+                upvotes:
+                  type === "upvote"
+                    ? report.upvotes + 1
+                    : report.upvotes,
+                downvotes:
+                  type === "downvote"
+                    ? report.downvotes + 1
+                    : report.downvotes,
+              }
+              : report
+          )
+        );
+      } else {
+        console.error(data.error);
+      }
+    } catch (err) {
+      console.error("Vote error:", err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-[#1E1E1E] flex flex-col overflow-hidden">
-      <Toaster 
+      <Toaster
         position="top-center"
         toastOptions={{
           style: {
@@ -230,7 +269,7 @@ useEffect(() => {
           {/* Left Section */}
           <div className="flex items-center gap-2 sm:gap-3">
             {!isNavigating && (
-              <button 
+              <button
                 onClick={() => setShowSidebar(!showSidebar)}
                 className="lg:hidden p-2 text-gray-400 hover:text-white transition-colors"
               >
@@ -335,11 +374,10 @@ useEffect(() => {
                       <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`flex-1 px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1 sm:gap-2 transition-all duration-200 ${
-                          activeTab === tab.id
-                            ? 'bg-[#1975d8] text-white'
-                            : 'text-gray-300 hover:text-white hover:bg-[#2C2C2C]'
-                        }`}
+                        className={`flex-1 px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1 sm:gap-2 transition-all duration-200 ${activeTab === tab.id
+                          ? 'bg-[#1975d8] text-white'
+                          : 'text-gray-300 hover:text-white hover:bg-[#2C2C2C]'
+                          }`}
                       >
                         <tab.icon className="w-4 h-4 sm:w-5 sm:h-5" />
                         <span className="hidden xs:inline">{tab.label}</span>
@@ -352,158 +390,187 @@ useEffect(() => {
                 <div className="flex-1 overflow-hidden bg-[#1E1E1E] rounded-xl sm:rounded-2xl border border-gray-800 mt-3 sm:mt-4 max-h-[80vh] ">
                   <div className="h-full  p-3 sm:p-4 overflow-auto">
                     {activeTab === 'reports' && (
-  <div className="space-y-4 ">
-    {/* Header with Stats */}
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <div className="p-2 bg-[#1975d8] rounded-xl">
-          <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-        </div>
-        <div>
-          <h3 className="text-lg sm:text-xl font-bold text-white">Safety Reports</h3>
-          <p className="text-xs text-gray-400">
-            {reports.length} {reports.length === 1 ? 'report' : 'reports'} in your area
-          </p>
-        </div>
-      </div>
-      <div className="flex gap-1">
-        <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-        <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-      </div>
-    </div>
+                      <div className="space-y-4">
+                        {/* Header with Stats */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="p-2 bg-[#1975d8] rounded-xl">
+                              <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                            </div>
+                            <div>
+                              <h3 className="text-lg sm:text-xl font-bold text-white">Safety Reports</h3>
+                              <p className="text-xs text-gray-400">
+                                {reports.length} {reports.length === 1 ? 'report' : 'reports'} in your area
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                            <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          </div>
+                        </div>
 
-    {/* Quick Stats */}
-    {reports.length > 0 && (
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-2 text-center">
-          <div className="text-red-400 font-bold text-sm">
-            {reports.filter(r => r.category.toLowerCase() === 'danger').length}
-          </div>
-          <div className="text-red-400 text-xs">Danger</div>
-        </div>
-        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-2 text-center">
-          <div className="text-yellow-400 font-bold text-sm">
-            {reports.filter(r => r.category.toLowerCase() === 'caution').length}
-          </div>
-          <div className="text-yellow-400 text-xs">Caution</div>
-        </div>
-        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-2 text-center">
-          <div className="text-green-400 font-bold text-sm">
-            {reports.filter(r => r.category.toLowerCase() === 'safe').length}
-          </div>
-          <div className="text-green-400 text-xs">Safe</div>
-        </div>
-      </div>
-    )}
+                        {/* Quick Stats */}
+                        {reports.length > 0 && (
+                          <div className="grid grid-cols-3 gap-2 mb-4">
+                            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-2 text-center">
+                              <div className="text-red-400 font-bold text-sm">
+                                {reports.filter(r => r.category.toLowerCase() === 'danger').length}
+                              </div>
+                              <div className="text-red-400 text-xs">Danger</div>
+                            </div>
+                            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-2 text-center">
+                              <div className="text-yellow-400 font-bold text-sm">
+                                {reports.filter(r => r.category.toLowerCase() === 'caution').length}
+                              </div>
+                              <div className="text-yellow-400 text-xs">Caution</div>
+                            </div>
+                            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-2 text-center">
+                              <div className="text-green-400 font-bold text-sm">
+                                {reports.filter(r => r.category.toLowerCase() === 'safe').length}
+                              </div>
+                              <div className="text-green-400 text-xs">Safe</div>
+                            </div>
+                          </div>
+                        )}
 
-    {/* Reports List */}
-    <div className="space-y-3 max-h-[calc(100vh-280px)] overflow-y-auto custom-scrollbar px-1">
-      {reports.length === 0 ? (
-        <div className="text-center py-8">
-          <div className="w-16 h-16 mx-auto mb-3 bg-[#2C2C2C] rounded-full flex items-center justify-center">
-            <FileText className="w-8 h-8 text-gray-500" />
-          </div>
-          <h4 className="text-gray-300 font-semibold mb-1">No Reports Yet</h4>
-          <p className="text-gray-500 text-sm">Be the first to report safety information in your area</p>
-        </div>
-      ) : (
-        reports.map((report) => {
-          const isDanger = report.category.toLowerCase() === 'danger';
-          const isCaution = report.category.toLowerCase() === 'caution';
-          const isSafe = report.category.toLowerCase() === 'safe';
-          
-          return (
-            <div 
-              key={report.id} 
-              className={`
-                group relative p-4 rounded-2xl border-2 transition-all duration-300 hover:scale-[0.9] hover:shadow-2xl cursor-pointer max-w-90 max-h-90
-                ${isDanger 
-                  ? 'bg-gradient-to-br from-red-500/5 to-red-500/10 border-red-500/30 hover:border-red-500/50' 
-                  : isCaution 
-                  ? 'bg-gradient-to-br from-yellow-500/5 to-yellow-500/10 border-yellow-500/30 hover:border-yellow-500/50'
-                  : 'bg-gradient-to-br from-green-500/5 to-green-500/10 border-green-500/30 hover:border-green-500/50'
-                }
+                        {/* Reports List */}
+                        <div className="space-y-3 max-h-[calc(100vh-280px)] overflow-y-auto custom-scrollbar px-1">
+                          {reports.length === 0 ? (
+                            <div className="text-center py-8">
+                              <div className="w-16 h-16 mx-auto mb-3 bg-[#2C2C2C] rounded-full flex items-center justify-center">
+                                <FileText className="w-8 h-8 text-gray-500" />
+                              </div>
+                              <h4 className="text-gray-300 font-semibold mb-1">No Reports Yet</h4>
+                              <p className="text-gray-500 text-sm">Be the first to report safety information in your area</p>
+                            </div>
+                          ) : (
+                            reports.map((report) => {
+                              const isDanger = report.category.toLowerCase() === 'danger';
+                              const isCaution = report.category.toLowerCase() === 'caution';
+                              const isSafe = report.category.toLowerCase() === 'safe';
+
+                              return (
+                                <div
+                                  key={report.id}
+                                  className={`
+                group relative p-4 rounded-2xl border-2 transition-all duration-300 hover:scale-[0.99] hover:shadow-2xl cursor-pointer
+                ${isDanger
+                                      ? 'bg-gradient-to-br from-red-500/5 to-red-500/10 border-red-500/30 '
+                                      : isCaution
+                                        ? 'bg-gradient-to-br from-yellow-500/5 to-yellow-500/10 border-yellow-500/30'
+                                        : 'bg-gradient-to-br from-green-500/5 to-green-500/10 border-green-500/30 '
+                                    }
               `}
-            >
-              {/* Glow effect */}
-              <div className={`
-                absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm
+                                >
+                                  {/* Glow effect */}
+                                  <div className={`
+                absolute inset-0 rounded-2xl opacity-0  transition-opacity duration-300 blur-sm
                 ${isDanger ? 'bg-red-500/20' : isCaution ? 'bg-yellow-500/20' : 'bg-green-500/20'}
               `}></div>
 
-              <div className="relative z-10">
-                {/* Header */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className={`
+                                  <div className="relative z-10">
+                                    {/* Header */}
+                                    <div className="flex items-start justify-between mb-3">
+                                      <div className="flex items-center gap-2">
+                                        <div className={`
                       w-3 h-3 rounded-full animate-pulse
                       ${isDanger ? 'bg-red-500' : isCaution ? 'bg-yellow-500' : 'bg-green-500'}
                     `}></div>
-                    <span className={`
+                                        <span className={`
                       text-sm font-bold px-3 py-1 rounded-full border
-                      ${isDanger 
-                        ? 'bg-red-500/20 text-red-300 border-red-500/40' 
-                        : isCaution 
-                        ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40'
-                        : 'bg-green-500/20 text-green-300 border-green-500/40'
-                      }
+                      ${isDanger
+                                            ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                                            : isCaution
+                                              ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40'
+                                              : 'bg-green-500/20 text-green-300 border-green-500/40'
+                                          }
                     `}>
-                      {report.category}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400 bg-[#1E1E1E] px-2 py-1 rounded-lg border border-gray-700">
-                      {new Date(report.date).toLocaleDateString('en-US', { 
-                        month: 'short', 
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </span>
-                  </div>
-                </div>
+                                          {report.category}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 bg-[#1E1E1E] px-2 py-1 rounded-lg border border-gray-700">
+                                          {new Date(report.date).toLocaleDateString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                          })}
+                                        </span>
+                                      </div>
+                                    </div>
 
-                {/* Description */}
-                <p className="text-gray-200 text-sm mb-3 leading-relaxed line-clamp-3 group-hover:line-clamp-none transition-all duration-200">
-                  {report.description}
-                </p>
+                                    {/* Image Preview */}
+                                    {report.image_url && (
+                                      <div className="mb-3">
+                                        <img
+                                          src={report.image_url}
+                                          alt="Report evidence"
+                                          className="w-full h-48 object-cover rounded-xl border-2 border-gray-600"
+                                        />
+                                      </div>
+                                    )}
 
-                {/* Footer */}
-                <div className="flex items-center justify-between pt-3 border-t border-gray-700/50">
-                  <div className="flex items-center gap-2 text-gray-400">
-                    <MapPin className="w-4 h-4" />
-                    <span className="text-xs font-mono">
-                      {report.location[0].toFixed(4)}, {report.location[1].toFixed(4)}
-                    </span>
-                  </div>
-                  <div className={`
+                                    {/* Description */}
+                                    <p className="text-gray-200 text-sm mb-3 leading-relaxed line-clamp-3 group-hover:line-clamp-none transition-all duration-200">
+                                      {report.description}
+                                    </p>
+
+                                    {/* Footer */}
+                                    <div className="flex items-center justify-between pt-3 border-t border-gray-700/50">
+                                      <div className="flex items-center gap-2 text-gray-400">
+                                        <MapPin className="w-4 h-4" />
+                                        <span className="text-xs font-mono">
+                                          {report.location && Array.isArray(report.location)
+                                            ? `${report.location[0].toFixed(4)}, ${report.location[1].toFixed(4)}`
+                                            : 'Location not available'
+                                          }
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between mt-2">
+                                        <button
+                                          onClick={() => handleVote(report.id, "upvote")}
+                                          className="flex items-center text-green-500 hover:text-green-600"
+                                        >
+                                          👍 {report.upvotes}
+                                        </button>
+                                        <button
+                                          onClick={() => handleVote(report.id, "downvote")}
+                                          className="flex items-center text-red-500 hover:text-red-600"
+                                        >
+                                          👎 {report.downvotes}
+                                        </button>
+                                      </div>
+
+                                      <div className={`
                     px-2 py-1 rounded-lg text-xs font-semibold
-                    ${isDanger 
-                      ? 'bg-red-500/20 text-red-300' 
-                      : isCaution 
-                      ? 'bg-yellow-500/20 text-yellow-300'
-                      : 'bg-green-500/20 text-green-300'
-                    }
+                    ${isDanger
+                                          ? 'bg-red-500/20 text-red-300'
+                                          : isCaution
+                                            ? 'bg-yellow-500/20 text-yellow-300'
+                                            : 'bg-green-500/20 text-green-300'
+                                        }
                   `}>
-                    {isDanger ? '🚨 High Risk' : isCaution ? '⚠️ Be Cautious' : '✅ Safe Area'}
-                  </div>
-                </div>
+                                        {isDanger ? '🚨 High Risk' : isCaution ? '⚠️ Be Cautious' : '✅ Safe Area'}
+                                      </div>
+                                    </div>
 
-                {/* Hover effect line */}
-                <div className={`
+                                    {/* Hover effect line */}
+                                    <div className={`
                   absolute bottom-0 left-1/2 transform -translate-x-1/2 w-0 h-0.5 rounded-full
                   group-hover:w-3/4 transition-all duration-300
                   ${isDanger ? 'bg-red-500' : isCaution ? 'bg-yellow-500' : 'bg-green-500'}
                 `}></div>
-              </div>
-            </div>
-          );
-        })
-      )}
-    </div>
-  </div>
-)}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {activeTab === 'submit' && (
                       <div className="h-full">
@@ -529,7 +596,7 @@ useEffect(() => {
                 endPoint={routePoints.end}
                 showHeatmap={showHeatmap}
               />
-              
+
               {/* RouteForm - Hidden during navigation */}
               {!isNavigating && (
                 <div className="absolute top-0.5 left-4 right-4 z-10">
@@ -593,7 +660,7 @@ useEffect(() => {
 
         {/* Mobile Overlay */}
         {showSidebar && !isNavigating && (
-          <div 
+          <div
             className="fixed inset-0 bg-black/50 z-20 lg:hidden"
             onClick={() => setShowSidebar(false)}
           />

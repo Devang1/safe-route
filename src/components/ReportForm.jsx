@@ -10,7 +10,8 @@ import {
 } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-const base_url = import.meta.env.VITE_API_URL || "http://localhost:5000";
+import { IKContext, IKUpload } from "imagekitio-react";
+const base_url = import.meta.env.REACT_APP_API_URL || "http://localhost:5000";
 // Fix default marker icons
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -77,6 +78,7 @@ export const ReportForm = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
   const searchInputRef = useRef(null);
   const formRef = useRef(null);
 
@@ -104,6 +106,11 @@ export const ReportForm = () => {
       setLocationError('Please select a location before submitting');
       return;
     }
+    if (!imageUrl) {
+      alert('Please upload an image before submitting');
+      return;
+    }
+
 
     setIsSubmitting(true);
 
@@ -113,7 +120,9 @@ export const ReportForm = () => {
       latitude: location[0],
       longitude: location[1],
       timestamp: new Date().toISOString(),
+      image_url: imageUrl,
     };
+
 
     try {
       const res = await fetch(`${base_url}/api/submitReport`, {
@@ -123,9 +132,9 @@ export const ReportForm = () => {
       });
 
       if (!res.ok) throw new Error('Failed to submit report');
-      
+
       alert('Report submitted successfully! 🎉');
-      
+
       // Reset form
       setDescription('');
       setLocation(null);
@@ -145,7 +154,7 @@ export const ReportForm = () => {
     setLocationError('');
     setLocationMode('gps');
     setShowSearchResults(false);
-    
+
     if (!navigator.geolocation) {
       setLocationError('Geolocation is not supported by your browser');
       return;
@@ -189,7 +198,7 @@ export const ReportForm = () => {
       );
       const data = await res.json();
       setSearchResults(data);
-      
+
       if (data.length === 0) {
         setLocationError('No results found. Try a more specific name.');
       }
@@ -228,9 +237,9 @@ export const ReportForm = () => {
 
   return (
     <div className="flex items-center justify-center max-h-[75vh] ">
-      <form 
+      <form
         ref={formRef}
-        onSubmit={handleSubmit} 
+        onSubmit={handleSubmit}
         className="max-w-2xl w-full max-h-[80vh] overflow-y-auto bg-[#1E1E1E] text-[#E0E0E0] shadow-lg rounded-lg border border-gray-700"
       >
         <div className="p-4 space-y-4">
@@ -255,11 +264,10 @@ export const ReportForm = () => {
                   key={opt.value}
                   type="button"
                   onClick={() => setCategory(opt.value)}
-                  className={`flex items-center gap-1 px-3 py-2 rounded-lg transition-all duration-200 flex-1 border ${
-                    category === opt.value
-                      ? `${categoryStyles[opt.value].active} border-transparent`
-                      : `${categoryStyles[opt.value].inactive} border-gray-600 hover:scale-102`
-                  }`}
+                  className={`flex items-center gap-1 px-3 py-2 rounded-lg transition-all duration-200 flex-1 border ${category === opt.value
+                    ? `${categoryStyles[opt.value].active} border-transparent`
+                    : `${categoryStyles[opt.value].inactive} border-gray-600 hover:scale-102`
+                    }`}
                 >
                   {opt.icon}
                   <span className="font-medium text-sm">{opt.label}</span>
@@ -292,7 +300,7 @@ export const ReportForm = () => {
             <label className="block font-semibold mb-2">
               Location <span className="text-red-400">*</span>
             </label>
-            
+
             {/* Location Method Buttons - Compact */}
             <div className="flex flex-wrap gap-2 mb-3">
               <button
@@ -303,7 +311,7 @@ export const ReportForm = () => {
                 <Navigation size={14} />
                 GPS
               </button>
-              
+
               <button
                 type="button"
                 onClick={() => {
@@ -377,7 +385,7 @@ export const ReportForm = () => {
                 {locationError}
               </div>
             )}
-            
+
             {location && (
               <div className="text-green-400 text-xs bg-green-400/10 border border-green-400/20 rounded p-2 mt-2 flex justify-between items-center">
                 <span className="truncate">
@@ -416,8 +424,8 @@ export const ReportForm = () => {
                   )}
                   {location && (
                     <>
-                      <Marker 
-                        position={location} 
+                      <Marker
+                        position={location}
                         icon={categoryIcons[category]}
                       >
                         <Popup>
@@ -435,6 +443,62 @@ export const ReportForm = () => {
               </div>
             </div>
           )}
+
+          {/* Image Upload - Required */}
+          <div className="bg-[#2A2A2A] p-3 rounded-lg border border-gray-600">
+            <label className="block font-semibold mb-2">
+              Upload Image <span className="text-red-400">*</span>
+            </label>
+
+            <IKContext
+              publicKey={import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY}
+              urlEndpoint={import.meta.env.VITE_IMAGEKIT_URL_ENDPOINT}
+              authenticator={async () => {
+                try {
+                  const response = await fetch(`${base_url}/api/imagekit-auth`);
+                  const data = await response.json();
+                  return data; // must include { signature, expire, token }
+                } catch (err) {
+                  console.error("Auth fetch failed:", err);
+                  throw err;
+                }
+              }}
+            >
+              <IKUpload
+                fileName="report-image.jpg"
+                onSuccess={(res) => {
+                  console.log("✅ Upload success:", res);
+                  setImageUrl(res.url);
+                }}
+                onError={(err) => {
+                  console.error("❌ Upload failed:", err);
+                  alert("Image upload failed. Try again.");
+                }}
+                validateFile={(file) => {
+                  if (!file) return false;
+                  const validTypes = ["image/jpeg", "image/png", "image/webp"];
+                  if (!validTypes.includes(file.type)) {
+                    alert("Please upload an image (JPG, PNG, or WEBP).");
+                    return false;
+                  }
+                  return true;
+                }}
+                className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 
+       file:rounded-lg file:border-0 file:text-sm file:font-semibold 
+       file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+              />
+            </IKContext>
+
+            {imageUrl && (
+              <div className="mt-3">
+                <img
+                  src={imageUrl}
+                  alt="Uploaded preview"
+                  className="rounded-lg border border-gray-600 max-h-40 object-cover"
+                />
+              </div>
+            )}
+          </div>
 
           {/* Submit Button - Compact */}
           <button

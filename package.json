@@ -19,6 +19,7 @@
     "express": "^5.1.0",
     "express-session": "^1.18.1",
     "imagekit": "^6.0.0",
+    "imagekitio-react": "^4.3.0",
     "jsonwebtoken": "^9.0.2",
     "leaflet": "^1.9.4",
     "leaflet-geometryutil": "^0.10.3",
