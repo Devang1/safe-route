@@ -131,7 +131,25 @@ class VoiceNavigationService {
 }
 
 const voiceService = new VoiceNavigationService();
+const MapResizer = ({ isNavigating }) => {
+  const map = useMap();
 
+  useEffect(() => {
+    // We wait 100ms to give the browser time to finish
+    // any layout changes (like a sidebar sliding away)
+    // before we tell Leaflet to recalculate its size.
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+      console.log('Map size invalidated');
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [isNavigating, map]); // Re-run whenever navigation state changes
+
+  return null; // This component renders nothing
+};
 // Navigation Instruction Generator
 class NavigationInstructionGenerator {
   static getInstruction(maneuver, distance, name = '') {
@@ -2109,7 +2127,7 @@ const Map = ({ startPoint, endPoint }) => {
             attribution='&copy; OpenStreetMap contributors'
             url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
           />
-
+          <MapResizer isNavigating={isNavigating} />
           <UserLocationMarker position={userLocation} isNavigating={isNavigating} />
 
           <ClusteredReportsLayer reports={reports} />
