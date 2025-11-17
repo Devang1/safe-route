@@ -131,7 +131,9 @@ class VoiceNavigationService {
 }
 
 const voiceService = new VoiceNavigationService();
-const MapResizer = ({ isNavigating }) => {
+
+// *** OPTIMIZED: Wrapped in React.memo ***
+const MapResizer = React.memo(({ isNavigating }) => {
   const map = useMap();
 
   useEffect(() => {
@@ -149,7 +151,8 @@ const MapResizer = ({ isNavigating }) => {
   }, [isNavigating, map]); // Re-run whenever navigation state changes
 
   return null; // This component renders nothing
-};
+});
+
 // Navigation Instruction Generator
 class NavigationInstructionGenerator {
   static getInstruction(maneuver, distance, name = '') {
@@ -375,8 +378,8 @@ const getRouteSegments = (coordinates, reports) => {
 };
 
 
-// Route Selection Panel
-const RouteSelectionPanel = ({ 
+// *** OPTIMIZED: Wrapped in React.memo ***
+const RouteSelectionPanel = React.memo(({ 
   selectedRoute,
   onStartNavigation,
   voiceEnabled,
@@ -430,10 +433,10 @@ const RouteSelectionPanel = ({
       </div>
     </div>
   );
-};
+});
 
-// Unified Navigation Panel Component
-const NavigationPanel = ({ 
+// *** OPTIMIZED: Wrapped in React.memo ***
+const NavigationPanel = React.memo(({ 
   isNavigating, 
   onStartNavigation, 
   onStopNavigation, 
@@ -543,7 +546,7 @@ const NavigationPanel = ({
       </div>
     </div>
   );
-};
+});
 
 // Real-time Navigation Component
 const calculateBearing = (point1, point2) => {
@@ -674,12 +677,12 @@ const generateInstructionsFromCoordinates = (coordinates) => {
   return instructions;
 };
 
-// *** UPDATED COMPONENT ***
-const RealTimeNavigation = ({ 
+// *** OPTIMIZED: Wrapped in React.memo ***
+const RealTimeNavigation = React.memo(({ 
   isActive, 
   onStopNavigation, 
   selectedRoute,
-  reports, // <-- NEW PROP
+  reports, 
   navigationIconType = 'car',
   voiceEnabled = true,
   onInstructionUpdate 
@@ -700,18 +703,22 @@ const RealTimeNavigation = ({
     progressPercentage: 0
   });
 
-  // *** NEW: Refs to prevent stale closures in callbacks ***
+  // *** FIX: Refs to prevent stale closures in callbacks ***
   const reportsRef = useRef(reports);
   const voiceEnabledRef = useRef(voiceEnabled);
+  const onInstructionUpdateRef = useRef(onInstructionUpdate);
+  const routeInstructionsRef = useRef(routeInstructions);
+  const hasStartedRef = useRef(hasStarted);
+  const selectedRouteRef = useRef(selectedRoute);
   const activeZoneAlertRef = useRef(null); // Tracks { reportId: string, stage: 'approaching' | 'entered' }
 
-  useEffect(() => {
-    reportsRef.current = reports;
-  }, [reports]);
-
-  useEffect(() => {
-    voiceEnabledRef.current = voiceEnabled;
-  }, [voiceEnabled]);
+  // *** FIX: Effects to keep refs in sync with props/state ***
+  useEffect(() => { reportsRef.current = reports; }, [reports]);
+  useEffect(() => { voiceEnabledRef.current = voiceEnabled; }, [voiceEnabled]);
+  useEffect(() => { onInstructionUpdateRef.current = onInstructionUpdate; }, [onInstructionUpdate]);
+  useEffect(() => { routeInstructionsRef.current = routeInstructions; }, [routeInstructions]);
+  useEffect(() => { hasStartedRef.current = hasStarted; }, [hasStarted]);
+  useEffect(() => { selectedRouteRef.current = selectedRoute; }, [selectedRoute]);
 
 
   const calculateTotalRouteDistance = useCallback((coordinates) => {
@@ -806,8 +813,8 @@ const RealTimeNavigation = ({
     return (heading + 360) % 360;
   };
 
-  // *** NEW FUNCTION for Zone Alerts ***
-  const checkZoneAlerts = (currentPosition) => {
+  // *** FIX: Wrapped in useCallback, uses refs ***
+  const checkZoneAlerts = useCallback((currentPosition) => {
     if (!voiceEnabledRef.current) return;
     const reports = reportsRef.current;
     if (!reports || reports.length === 0) return;
@@ -872,16 +879,21 @@ const RealTimeNavigation = ({
       // User is no longer near any zone, and we were tracking an alert
       activeZoneAlertRef.current = null;
     }
-  };
+  }, []); // Empty deps, relies only on refs and constants
 
 
-  const updateNavigationInstructions = (currentPosition) => {
+  // *** FIX: Wrapped in useCallback, uses refs ***
+  const updateNavigationInstructions = useCallback((currentPosition) => {
+    // Read all state/props from refs to avoid closure
+    const routeInstructions = routeInstructionsRef.current;
+    const selectedRoute = selectedRouteRef.current;
+    const onInstructionUpdate = onInstructionUpdateRef.current;
+
     if (routeInstructions.length === 0 || !selectedRoute?.coordinates) {
       console.log('No instructions or coordinates available yet');
       return;
     }
 
-    // *** NEW: Check for zone alerts on every update ***
     checkZoneAlerts(currentPosition);
 
     const remaining = calculateRemainingRoute(currentPosition, selectedRoute.coordinates);
@@ -918,7 +930,7 @@ const RealTimeNavigation = ({
       closestStep = Math.max(0, routeInstructions.length - 2);
     }
 
-    setCurrentStep(closestStep);
+    setCurrentStep(closestStep); // Local state update is fine
 
     let nextStep = null;
     let distanceToNextStep = 0;
@@ -944,14 +956,13 @@ const RealTimeNavigation = ({
       console.log('Updating instruction:', nextStep.text, 'Distance to next:', distanceToNextStep);
       console.log('Route progress - Distance left:', Math.round(remaining.distance), 'm, Time remaining:', Math.round(remaining.time), 's');
       
-      onInstructionUpdate(
+      onInstructionUpdate( // Call the ref'd function
         nextStep.text, 
         distanceToNextStep, 
         remaining.distance, 
         remaining.time
       );
 
-      // *** UPDATED: Use voiceEnabledRef.current to avoid stale prop ***
       if (voiceEnabledRef.current && !nextStep.isStart) {
         console.log('Voice enabled, checking if should speak...');
         
@@ -992,16 +1003,18 @@ const RealTimeNavigation = ({
         }
       }
 
-      if (!hasStarted && !nextStep.isStart && distanceToNextStep < 1000) {
-        setHasStarted(true);
-        // *** UPDATED: Use voiceEnabledRef.current ***
+      // *** FIX: Read from hasStartedRef, update both state and ref ***
+      if (!hasStartedRef.current && !nextStep.isStart && distanceToNextStep < 1000) {
+        setHasStarted(true); // Update state for next render
+        hasStartedRef.current = true; // Update ref for next interval check
         if (voiceEnabledRef.current) {
           console.log('Navigation started, speaking welcome message');
           voiceService.speak('Navigation started. Follow the route.');
         }
       }
     }
-  };
+  }, [checkZoneAlerts, calculateRemainingRoute, calculateTotalRouteDistance]); // Dependencies are stable
+
 
   const smoothRotate = (targetHeading) => {
     setCurrentHeading(prev => {
@@ -1040,7 +1053,7 @@ const RealTimeNavigation = ({
       previousPositionRef.current = null;
       activeZoneAlertRef.current = null; // Clear zone alert
       setCurrentStep(0);
-      setHasStarted(false);
+      setHasStarted(false); // Reset state
       setRouteInstructions([]);
       setRouteProgress({
         distanceLeft: 0,
@@ -1048,8 +1061,8 @@ const RealTimeNavigation = ({
         progressPercentage: 0
       });
       
-      if (onInstructionUpdate) {
-        onInstructionUpdate('Navigation ended', 0, 0, 0);
+      if (onInstructionUpdateRef.current) { // Use ref
+        onInstructionUpdateRef.current('Navigation ended', 0, 0, 0);
       }
       return;
     }
@@ -1065,24 +1078,23 @@ const RealTimeNavigation = ({
     let initialDistanceLeft = 0;
     let initialTimeRemaining = 0;
     
-    if (selectedRoute?.coordinates) {
-      const totalDistance = selectedRoute.summary?.totalDistance || 
-                            calculateTotalRouteDistance(selectedRoute.coordinates);
+    if (selectedRouteRef.current?.coordinates) { // Use ref
+      const totalDistance = selectedRouteRef.current.summary?.totalDistance || 
+                            calculateTotalRouteDistance(selectedRouteRef.current.coordinates);
       initialDistanceLeft = totalDistance;
-      initialTimeRemaining = selectedRoute.summary?.totalTime || calculateEstimatedTime(totalDistance);
+      initialTimeRemaining = selectedRouteRef.current.summary?.totalTime || calculateEstimatedTime(totalDistance);
     }
 
-    if (onInstructionUpdate) {
-      onInstructionUpdate('Starting navigation... Follow the route.', 0, initialDistanceLeft, initialTimeRemaining);
+    if (onInstructionUpdateRef.current) { // Use ref
+      onInstructionUpdateRef.current('Starting navigation... Follow the route.', 0, initialDistanceLeft, initialTimeRemaining);
     }
     
-    // *** UPDATED: Use voiceEnabledRef.current ***
-    if (voiceEnabledRef.current) {
-      voiceService.speak('Navigation starting. Please follow the route.');
-    }
+    // *** FIX: REMOVED voiceService.speak() TO PREVENT RACE CONDITION ***
+    // (The "Navigation started" message is now handled in updateNavigationInstructions)
 
     instructionCheckRef.current = setInterval(() => {
-      if (previousPositionRef.current && routeInstructions.length > 0 && selectedRoute?.coordinates) {
+      if (previousPositionRef.current) {
+        // *** FIX: Call the stable useCallback function ***
         updateNavigationInstructions(previousPositionRef.current);
       }
     }, 2000);
@@ -1097,13 +1109,11 @@ const RealTimeNavigation = ({
           speed: position.coords.speed
         };
 
-        console.log('New position:', newPosition.lat.toFixed(6), newPosition.lng.toFixed(6));
-
+        // --- "LIGHT" LOGIC (RUNS ON EVERY UPDATE) ---
         let heading = newPosition.heading;
         if ((heading === null || heading === undefined) && previousPositionRef.current) {
           heading = calculateHeading(previousPositionRef.current, newPosition);
         }
-
         if (heading !== null && heading !== undefined) {
           smoothRotate(heading);
         }
@@ -1111,21 +1121,18 @@ const RealTimeNavigation = ({
         if (markerRef.current) {
           markerRef.current.setLatLng([newPosition.lat, newPosition.lng]);
         }
-
-        map.flyTo([newPosition.lat, newPosition.lng], 16, {
-          duration: 1,
-          easeLinearity: 0.25
+        
+        map.panTo([newPosition.lat, newPosition.lng], {
+          animate: false,
+          noMoveStart: true
         });
 
-        if (routeInstructions.length > 0 && selectedRoute?.coordinates) {
-          updateNavigationInstructions(newPosition);
-        }
-
         previousPositionRef.current = newPosition;
+        // --- END OF "LIGHT" LOGIC ---
       },
       (error) => {
         console.error('Error watching position:', error);
-        onStopNavigation();
+        onStopNavigation(); // This is a prop, but it's stable (useCallback)
       },
       {
         enableHighAccuracy: true,
@@ -1153,12 +1160,9 @@ const RealTimeNavigation = ({
     map, 
     navigationIconType, 
     onStopNavigation, 
-    routeInstructions, 
-    // voiceEnabled (removed, using ref)
-    onInstructionUpdate, 
-    selectedRoute,
-    calculateTotalRouteDistance,
-    calculateEstimatedTime
+    calculateTotalRouteDistance, 
+    calculateEstimatedTime,
+    updateNavigationInstructions // *** FIX: Add stable callback as dependency ***
   ]);
 
   useEffect(() => {
@@ -1166,11 +1170,11 @@ const RealTimeNavigation = ({
   }, [currentHeading, navigationIconType]);
 
   return null;
-};
+});
 
 
-// *** FIXED RoutingMachine Component - Properly handles route selection ***
-const RoutingMachine = ({
+// *** OPTIMIZED: Wrapped in React.memo ***
+const RoutingMachine = React.memo(({
   startPoint,
   endPoint,
   reports,
@@ -1455,7 +1459,7 @@ const RoutingMachine = ({
   }, [selectedRouteIndex, routesFetched, allRoutesData, onRoutesComputed, drawSelectedRoute]);
 
   return null;
-};
+});
 
 // Utility functions
 const blendHex = (hex1, hex2, t) => {
@@ -1502,8 +1506,8 @@ const computeClusterColor = ({ dangerCount, cautionCount, safeCount }) => {
   }
 };
 
-// Clustered Reports Layer
-const ClusteredReportsLayer = ({ reports }) => {
+// *** OPTIMIZED: Wrapped in React.memo ***
+const ClusteredReportsLayer = React.memo(({ reports }) => {
   const map = useMap();
   const markerGroupRef = useRef(L.layerGroup());
   const zoomRef = useRef(map.getZoom());
@@ -1625,10 +1629,10 @@ const ClusteredReportsLayer = ({ reports }) => {
   }, [reports]);
 
   return null;
-};
+});
 
-// *** UPDATED COMPONENT ***
-const UserLocationMarker = ({ position, isNavigating }) => {
+// *** OPTIMIZED: Wrapped in React.memo ***
+const UserLocationMarker = React.memo(({ position, isNavigating }) => {
   const map = useMap();
 
   useEffect(() => {
@@ -1657,9 +1661,10 @@ const UserLocationMarker = ({ position, isNavigating }) => {
   }, [position, isNavigating, map]); // Added map to dependency array
 
   return null;
-};
+});
 
-const RouteSafetyPanel = ({ routes, visible, onToggle, selectedRouteIndex, onRouteSelect, isNavigating }) => {
+// *** OPTIMIZED: Wrapped in React.memo ***
+const RouteSafetyPanel = React.memo(({ routes, visible, onToggle, selectedRouteIndex, onRouteSelect, isNavigating }) => {
   if (!visible) {
     return (
       <button
@@ -1718,9 +1723,10 @@ const RouteSafetyPanel = ({ routes, visible, onToggle, selectedRouteIndex, onRou
       </div>
     </div>
   );
-};
+});
 
 // ... (Other UI components like Header, RouteCard, etc. remain unchanged) ...
+// Note: These are not memoized as they are small and not part of the main file's component definitions
 const Header = ({ onToggle }) => (
   <div className="flex justify-between items-center mb-4">
     <h2 className="text-lg font-semibold text-white">Safe Routes</h2>
@@ -1842,10 +1848,15 @@ const Map = ({ startPoint, endPoint }) => {
   const [isNavigating, setIsNavigating] = useState(false);
   const [navigationIconType, setNavigationIconType] = useState('car');
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [nextInstruction, setNextInstruction] = useState('Starting navigation...');
-  const [distanceToNext, setDistanceToNext] = useState(0);
-  const [distanceLeft, setDistanceLeft] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState(0);
+  
+  // *** OPTIMIZATION: Consolidated navigation state ***
+  const [navData, setNavData] = useState({
+    nextInstruction: 'Starting navigation...',
+    distanceToNext: 0,
+    distanceLeft: 0,
+    timeRemaining: 0,
+  });
+
   const [navigationStopped, setNavigationStopped] = useState(false);
   const [mapKey, setMapKey] = useState(0);
   const [locationLoaded, setLocationLoaded] = useState(false);
@@ -1870,9 +1881,13 @@ const Map = ({ startPoint, endPoint }) => {
       setRouteSafetyInfo([]);
       setSelectedRouteIndex(0); 
       setPanelVisible(true);
-      setNextInstruction('Starting navigation...');
-      setDistanceLeft(0);
-      setTimeRemaining(0);
+      // Reset navData state
+      setNavData({
+        nextInstruction: 'Starting navigation...',
+        distanceToNext: 0,
+        distanceLeft: 0,
+        timeRemaining: 0,
+      });
     }
   }, [startPoint, endPoint]);
 
@@ -1936,6 +1951,7 @@ const Map = ({ startPoint, endPoint }) => {
     getUserLocation();
   }, []);
 
+  // *** OPTIMIZATION: Wrapped in useCallback ***
   const handleRoutesComputed = useCallback((routes) => {
     setRouteSafetyInfo(routes);
     setShouldShowRoutes(true); 
@@ -1945,11 +1961,15 @@ const Map = ({ startPoint, endPoint }) => {
       // set selectedRouteIndex to 0 (safest route) is already the default
       const selectedRoute = routes[0]; // Safest route (index 0)
       if (selectedRoute) {
-        setDistanceLeft(selectedRoute.summary?.totalDistance || 0);
-        setTimeRemaining(selectedRoute.summary?.totalTime || 0);
+        // Set initial distance/time
+        setNavData(prev => ({
+          ...prev,
+          distanceLeft: selectedRoute.summary?.totalDistance || 0,
+          timeRemaining: selectedRoute.summary?.totalTime || 0,
+        }));
       }
     }
-  }, []); 
+  }, []); // Empty dependency array is correct
 
   useEffect(() => {
     // This effect updates the panel when the index *or* the route info changes
@@ -1963,8 +1983,11 @@ const Map = ({ startPoint, endPoint }) => {
     }
 
     if (routeToShow) {
-      setDistanceLeft(routeToShow.summary?.totalDistance || 0);
-      setTimeRemaining(routeToShow.summary?.totalTime || 0);
+      setNavData(prev => ({
+        ...prev,
+        distanceLeft: routeToShow.summary?.totalDistance || 0,
+        timeRemaining: routeToShow.summary?.totalTime || 0,
+      }));
     }
   }, [selectedRouteIndex, routeSafetyInfo, isNavigating]); // Added isNavigating
 
@@ -1989,17 +2012,16 @@ const Map = ({ startPoint, endPoint }) => {
     };
   }, []);
 
-  const handleStartNavigation = () => {
-    if (voiceEnabled && voiceService.isSupported()) {
-      voiceService.speak('Starting navigation. Please follow the route.');
-    }
-    
+  // *** OPTIMIZATION: Wrapped in useCallback ***
+  const handleStartNavigation = useCallback(() => {
+    // Note: We removed the voiceService.speak() call from here to fix a race condition
     setIsNavigating(true);
     setPanelVisible(false);
     setNavigationStopped(false);
-  };
+  }, []); // Empty dependency array
 
-  const handleStopNavigation = () => {
+  // *** OPTIMIZATION: Wrapped in useCallback ***
+  const handleStopNavigation = useCallback(() => {
     if (voiceEnabled) {
       voiceService.speak('Navigation ended.');
     }
@@ -2007,19 +2029,24 @@ const Map = ({ startPoint, endPoint }) => {
     setIsNavigating(false);
     setPanelVisible(true);
     setNavigationStopped(true);
-    setNextInstruction('Navigation ended');
-    setDistanceToNext(0);
-    setDistanceLeft(0);
-    setTimeRemaining(0);
+    
+    // Reset navData
+    setNavData({
+      nextInstruction: 'Navigation ended',
+      distanceToNext: 0,
+      distanceLeft: 0,
+      timeRemaining: 0,
+    });
     
     setRouteSafetyInfo([]);
     setSelectedRouteIndex(0);
     setShouldShowRoutes(false); 
     
     setMapKey(prev => prev + 1);
-  };
+  }, [voiceEnabled]); // Depends on voiceEnabled
 
-  const handleVoiceToggle = () => {
+  // *** OPTIMIZATION: Wrapped in useCallback ***
+  const handleVoiceToggle = useCallback(() => {
     const newVoiceEnabled = !voiceEnabled;
     setVoiceEnabled(newVoiceEnabled);
     voiceService.setEnabled(newVoiceEnabled);
@@ -2027,18 +2054,21 @@ const Map = ({ startPoint, endPoint }) => {
     if (newVoiceEnabled && isNavigating) {
       voiceService.speak('Voice guidance enabled');
     }
-  };
+  }, [voiceEnabled, isNavigating]); // Depends on voiceEnabled and isNavigating
 
+  // *** OPTIMIZATION: Wrapped in useCallback and updates consolidated state ***
   const handleInstructionUpdate = useCallback((instruction, distance, newDistanceLeft = 0, newTimeRemaining = 0) => {
-    setNextInstruction(instruction);
-    setDistanceToNext(distance);
-    
-    if (newDistanceLeft >= 0) {
-      setDistanceLeft(newDistanceLeft);
-    }
-    if (newTimeRemaining >= 0) {
-      setTimeRemaining(newTimeRemaining);
-    }
+    setNavData({
+      nextInstruction: instruction,
+      distanceToNext: distance,
+      distanceLeft: newDistanceLeft,
+      timeRemaining: newTimeRemaining,
+    });
+  }, []); // Empty dependency array
+
+  // *** OPTIMIZATION: Memoized function for panel toggle ***
+  const handlePanelToggle = useCallback(() => {
+    setPanelVisible(prev => !prev);
   }, []);
 
   // *** UPDATED to handle navigation mode ***
@@ -2174,8 +2204,8 @@ const Map = ({ startPoint, endPoint }) => {
         <RouteSafetyPanel
           routes={routeSafetyInfo}
           visible={panelVisible}
-          onToggle={() => setPanelVisible(prev => !prev)}
-          selectedRouteIndex={isNavigating ? 0 : selectedRouteIndex} // *** UPDATED ***
+          onToggle={handlePanelToggle} // *** OPTIMIZED ***
+          selectedRouteIndex={isNavigating ? 0 : selectedRouteIndex} 
           onRouteSelect={setSelectedRouteIndex}
           isNavigating={isNavigating}
         />
@@ -2185,24 +2215,24 @@ const Map = ({ startPoint, endPoint }) => {
         <>
           {!isNavigating && !navigationStopped && (
             <RouteSelectionPanel
-              selectedRoute={selectedRouteInfo} // *** UPDATED ***
-              onStartNavigation={handleStartNavigation}
+              selectedRoute={selectedRouteInfo} 
+              onStartNavigation={handleStartNavigation} // *** OPTIMIZED ***
               voiceEnabled={voiceEnabled}
-              onVoiceToggle={handleVoiceToggle}
+              onVoiceToggle={handleVoiceToggle} // *** OPTIMIZED ***
             />
           )}
           
           {isNavigating && (
             <NavigationPanel
               isNavigating={isNavigating}
-              onStopNavigation={handleStopNavigation}
-              selectedRoute={selectedRouteInfo} // *** UPDATED ***
+              onStopNavigation={handleStopNavigation} // *** OPTIMIZED ***
+              selectedRoute={selectedRouteInfo} 
               voiceEnabled={voiceEnabled}
-              onVoiceToggle={handleVoiceToggle}
-              nextInstruction={nextInstruction}
-              distanceToNext={distanceToNext}
-              distanceLeft={distanceLeft}
-              timeRemaining={timeRemaining}
+              onVoiceToggle={handleVoiceToggle} // *** OPTIMIZED ***
+              nextInstruction={navData.nextInstruction} // *** OPTIMIZED ***
+              distanceToNext={navData.distanceToNext} // *** OPTIMIZED ***
+              distanceLeft={navData.distanceLeft} // *** OPTIMIZED ***
+              timeRemaining={navData.timeRemaining} // *** OPTIMIZED ***
             />
           )}
         </>
