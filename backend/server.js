@@ -6,18 +6,40 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import axios from 'axios';
+import ImageKit from "imagekit";
+import path from "path";
 
+// dotenv.config({ path: path.resolve("./backend/.env") });
 dotenv.config();
 const { Pool } = pkg;
 
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5173',
+  credentials: true,
+}));
 app.use(bodyParser.json());
 
+const imagekit = new ImageKit({
+  publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+  privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
+});
+
+app.get("/api/imagekit-auth", async (req, res) => {
+  try {
+    const authenticationParameters = imagekit.getAuthenticationParameters();
+    res.json(authenticationParameters);
+  } catch (error) {
+    console.error("❌ Error generating ImageKit auth params:", error.message);
+    res.status(500).json({ error: "Failed to generate ImageKit authentication parameters." });
+  }
+});
+
 // Database connection using connection string
-const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:@Devang119@localhost:5432/SafeRoute';
+const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:123456789@localhost:5432/SafeRoute';
 
 const pool = new Pool({
   connectionString: connectionString,
@@ -54,6 +76,7 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
+  console.log('Login attempt for:', req.body);
   if (!email || !password)
     return res.status(400).json({ error: 'Missing email or password' });
 
@@ -78,12 +101,51 @@ app.post('/api/login', async (req, res) => {
 /* ================================
    REPORT ROUTES
 ================================ */
+// app.get('/api/reports', async (req, res) => {
+//   try {
+//     const result = await pool.query('SELECT type, latitude, longitude FROM report');
+//     const formatted = result.rows.map(row => ({
+//       category: row.type,
+//       location: [parseFloat(row.latitude), parseFloat(row.longitude)],
+//     }));
+//     res.json(formatted);
+//   } catch (err) {
+//     console.error('Error fetching reports:', err.message);
+//     res.status(500).json({ error: 'Database error' });
+//   }
+// });
+
+// app.get('/api/reportsDetails', async (req, res) => {
+//   try {
+//     const result = await pool.query('SELECT * FROM report ORDER BY date DESC LIMIT 10');
+//     const formatted = result.rows.map(row => ({
+//       date: row.date,
+//       time: row.time,
+//       category: row.type,
+//       description: row.description,
+//       location: [parseFloat(row.latitude), parseFloat(row.longitude)],
+//     }));
+//     res.json(formatted);
+//   } catch (err) {
+//     console.error('Error fetching reports:', err.message);
+//     res.status(500).json({ error: 'Database error' });
+//   }
+// });
+
+// Revised report fetching with more details
+/* ================================
+   REPORT ROUTES
+================================ */
 app.get('/api/reports', async (req, res) => {
   try {
-    const result = await pool.query('SELECT type, latitude, longitude FROM report');
+    const result = await pool.query('SELECT id, type, latitude, longitude, image_url, upvotes, downvotes FROM report');
     const formatted = result.rows.map(row => ({
+      id: row.id,
       category: row.type,
       location: [parseFloat(row.latitude), parseFloat(row.longitude)],
+      image_url: row.image_url,
+      upvotes: row.upvotes,
+      downvotes: row.downvotes
     }));
     res.json(formatted);
   } catch (err) {
@@ -96,12 +158,17 @@ app.get('/api/reportsDetails', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM report ORDER BY date DESC LIMIT 10');
     const formatted = result.rows.map(row => ({
+      id: row.id,
       date: row.date,
       time: row.time,
       category: row.type,
       description: row.description,
       location: [parseFloat(row.latitude), parseFloat(row.longitude)],
+      image_url: row.image_url,
+      upvotes: row.upvotes,
+      downvotes: row.downvotes
     }));
+    console.log('Fetched reports details:', formatted);
     res.json(formatted);
   } catch (err) {
     console.error('Error fetching reports:', err.message);
@@ -111,7 +178,7 @@ app.get('/api/reportsDetails', async (req, res) => {
 
 app.post('/api/submitReport', async (req, res) => {
   try {
-    const { category, description, location, timestamp, latitude, longitude } = req.body;
+    const { category, description, location, timestamp, latitude, longitude, image_url } = req.body;
     console.log('Received report:', req.body);
     
     // Validate required fields
@@ -149,12 +216,12 @@ app.post('/api/submitReport', async (req, res) => {
     const date = dateObj.toISOString().split('T')[0];
     const time = dateObj.toTimeString().split(' ')[0];
 
-    // Insert into database WITHOUT specifying id (let database generate it)
+    // Insert into database WITH image_url
     const result = await pool.query(
-      `INSERT INTO report (type, description, latitude, longitude, date, time)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO report (type, description, latitude, longitude, date, time, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-      [category, description, lat, lng, date, time]
+      [category, description, lat, lng, date, time, image_url]
     );
     
     console.log('✅ Report saved with ID:', result.rows[0].id);
@@ -180,6 +247,108 @@ app.post('/api/submitReport', async (req, res) => {
     });
   }
 });
+
+// Vote on a report (upvote or downvote)
+app.put("/api/vote", async (req, res) => {
+  const { type,reportId } = req.body; // 'upvote' or 'downvote'
+
+  if (type !== "upvote" && type !== "downvote") {
+    return res.status(400).json({ error: "Invalid vote type" });
+  }
+console.log(`Received `, req.body);
+  try {
+    const column = type === "upvote" ? "upvotes" : "downvotes";
+
+    const result = await pool.query(
+      `UPDATE report
+       SET ${column} = ${column} + 1
+       WHERE id = $1
+       RETURNING id, ${column}`,
+      [reportId]
+    );
+
+    res.json({
+      message: `${type} added successfully`,
+      reportId: reportId,
+      newCount: result.rows[0][column],
+    });
+  } catch (err) {
+    console.error("Error updating votes:", err.message);
+    res.status(500).json({ error: "Failed to update votes" });
+  }
+});
+
+// app.post('/api/submitReport', async (req, res) => {
+//   try {
+//     const { category, description, location, timestamp, latitude, longitude } = req.body;
+//     console.log('Received report:', req.body);
+    
+//     // Validate required fields
+//     if (!category) {
+//       return res.status(400).json({ error: 'Category is required.' });
+//     }
+//     if (!description) {
+//       return res.status(400).json({ error: 'Description is required.' });
+//     }
+
+//     // Parse location data
+//     let lat, lng;
+//     if (location && Array.isArray(location) && location.length === 2) {
+//       [lat, lng] = location.map(coord => parseFloat(coord));
+//     } else if (latitude !== undefined && longitude !== undefined) {
+//       lat = parseFloat(latitude);
+//       lng = parseFloat(longitude);
+//     } else {
+//       return res.status(400).json({ 
+//         error: 'Location data required. Provide either location array or latitude/longitude.' 
+//       });
+//     }
+
+//     // Validate coordinates
+//     if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+//       return res.status(400).json({ error: 'Invalid coordinates.' });
+//     }
+
+//     // Parse timestamp
+//     const dateObj = timestamp ? new Date(timestamp) : new Date();
+//     if (isNaN(dateObj.getTime())) {
+//       return res.status(400).json({ error: 'Invalid timestamp.' });
+//     }
+
+//     const date = dateObj.toISOString().split('T')[0];
+//     const time = dateObj.toTimeString().split(' ')[0];
+
+//     // Insert into database WITHOUT specifying id (let database generate it)
+//     const result = await pool.query(
+//       `INSERT INTO report (type, description, latitude, longitude, date, time)
+//        VALUES ($1, $2, $3, $4, $5, $6)
+//        RETURNING id`,
+//       [category, description, lat, lng, date, time]
+//     );
+    
+//     console.log('✅ Report saved with ID:', result.rows[0].id);
+    
+//     res.status(201).json({ 
+//       message: 'Report submitted successfully.', 
+//       id: result.rows[0].id
+//     });
+
+//   } catch (error) {
+//     console.error('❌ Error saving report:', error);
+    
+//     // Handle duplicate key error specifically
+//     if (error.code === '23505') {
+//       return res.status(400).json({ 
+//         error: 'Report ID conflict. Please try again.' 
+//       });
+//     }
+    
+//     res.status(500).json({ 
+//       error: 'Internal server error while saving report.',
+//       details: process.env.NODE_ENV === 'development' ? error.message : undefined
+//     });
+//   }
+// });
 
 /* ================================
    SOS CONTACT ROUTES
