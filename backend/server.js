@@ -17,7 +17,10 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: [
+    'http://localhost:5173',
+    'https://safe-route-119-frontend.onrender.com'
+  ],
   credentials: true,
 }));
 app.use(bodyParser.json());
