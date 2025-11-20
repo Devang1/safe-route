@@ -1,18 +1,30 @@
-import { useState, useEffect } from 'react';
-import Map from './components/Map';
-import { ReportForm } from './components/ReportForm';
-import { RouteForm } from './components/RouteForm';
-import { Navigation, FileText, PlusCircle, Share2, AlertTriangle, MapPin, User, LogOut, Menu, X, RouteIcon } from 'lucide-react';
+import { useState, useEffect } from "react";
+import Map from "./components/Map";
+import { ReportForm } from "./components/ReportForm";
+import { RouteForm } from "./components/RouteForm";
+import {
+  Navigation,
+  FileText,
+  PlusCircle,
+  Share2,
+  AlertTriangle,
+  MapPin,
+  User,
+  LogOut,
+  Menu,
+  X,
+  RouteIcon,
+} from "lucide-react";
 import { BrowserRouter, Route, Routes, useNavigate } from "react-router-dom";
 import Login from "./components/auth/index";
-import { toast, Toaster } from 'react-hot-toast';
-import SafeRouteChatbot from './components/chatbot';
-import { jwtDecode } from 'jwt-decode';
+import { toast, Toaster } from "react-hot-toast";
+import SafeRouteChatbot from "./components/chatbot";
+import { jwtDecode } from "jwt-decode";
 
 function Home() {
   const [reports, setReports] = useState([]);
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('reports');
+  const [activeTab, setActiveTab] = useState("reports");
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [routePoints, setRoutePoints] = useState({});
   const [useCurrentLocation, setUseCurrentLocation] = useState(false);
@@ -25,10 +37,10 @@ function Home() {
   const [userVotes, setUserVotes] = useState({});
   const [editReport, setEditReport] = useState(null); // opens edit form
   const [editDraft, setEditDraft] = useState({
-    title: '',
-    description: '',
-    category: 'danger',
-    image_url: ''
+    title: "",
+    description: "",
+    category: "danger",
+    image_url: "",
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [user, setUser] = useState({ sosNumbers: [""] });
@@ -77,10 +89,9 @@ function Home() {
       setMyPosts(
         (data.reports || []).map((p) => ({
           ...p,
-          location: [Number(p.latitude), Number(p.longitude)]
+          location: [Number(p.latitude), Number(p.longitude)],
         }))
       );
-
     } catch (err) {
       console.error("Failed to load posts:", err);
     }
@@ -105,7 +116,6 @@ function Home() {
     }
   };
 
-
   useEffect(() => {
     // fetch(`${base_url}/api/reportsDetails`)
     //   .then(res => res.json())
@@ -115,8 +125,12 @@ function Home() {
     console.log("Fetched reports:", reports);
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        pos => setCurrentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        err => console.error(err)
+        (pos) =>
+          setCurrentLocation({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          }),
+        (err) => console.error(err)
       );
     }
 
@@ -131,10 +145,10 @@ function Home() {
       toast.success(`Route set to: ${placeName}`);
     };
 
-    window.addEventListener('setRouteFromChatbot', handleRouteFromChatbot);
+    window.addEventListener("setRouteFromChatbot", handleRouteFromChatbot);
 
     return () => {
-      window.removeEventListener('setRouteFromChatbot', handleRouteFromChatbot);
+      window.removeEventListener("setRouteFromChatbot", handleRouteFromChatbot);
     };
   }, []);
   // Listen for navigation state changes from the Map component
@@ -143,37 +157,45 @@ function Home() {
       setIsNavigating(event.detail.isNavigating);
     };
 
-    window.addEventListener('navigationStateChange', handleNavigationStateChange);
+    window.addEventListener(
+      "navigationStateChange",
+      handleNavigationStateChange
+    );
 
     return () => {
-      window.removeEventListener('navigationStateChange', handleNavigationStateChange);
+      window.removeEventListener(
+        "navigationStateChange",
+        handleNavigationStateChange
+      );
     };
   }, []);
   useEffect(() => {
     if (editReport) {
       setEditDraft({
-        description: editReport.description || '',
-        category: editReport.category || 'danger',
+        description: editReport.description || "",
+        category: editReport.category || "danger",
         // convert array location to "lat, lng" string for input
         location: Array.isArray(editReport.location)
           ? `${editReport.location[0]}, ${editReport.location[1]}`
-          : editReport.location || '',
-        image_url: editReport.image_url || ''
+          : editReport.location || "",
+        image_url: editReport.image_url || "",
       });
 
       // lock scroll while modal open
-      document.body.style.overflow = 'hidden';
+      document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = '';
+      document.body.style.overflow = "";
     }
 
-    return () => { document.body.style.overflow = ''; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [editReport]);
 
   const handleReportSubmit = (report) => {
     const newReport = { ...report, id: Date.now().toString() };
     setReports([...reports, newReport]);
-    setActiveTab('reports');
+    setActiveTab("reports");
     setShowSidebar(false);
     setShowReportForm(false); // Close mobile report form
   };
@@ -218,17 +240,24 @@ function Home() {
       }
 
       if (isMobile) {
-        window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank");
+        window.open(
+          `https://wa.me/?text=${encodeURIComponent(shareText)}`,
+          "_blank"
+        );
         toast.success("Opening WhatsApp...");
         return;
       }
 
-      const whatsappWebUrl = `https://web.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
+      const whatsappWebUrl = `https://web.whatsapp.com/send?text=${encodeURIComponent(
+        shareText
+      )}`;
       const newTab = window.open(whatsappWebUrl, "_blank");
 
       if (!newTab || newTab.closed || typeof newTab.closed === "undefined") {
         await navigator.clipboard.writeText(shareUrl);
-        toast("WhatsApp not available. Link copied to clipboard — share manually!");
+        toast(
+          "WhatsApp not available. Link copied to clipboard — share manually!"
+        );
       }
     } catch (err) {
       console.error("Share failed:", err);
@@ -274,7 +303,10 @@ function Home() {
     sosContacts.forEach((contact) => {
       const formatted = contact.replace(/[^0-9]/g, "");
       if (formatted.length >= 10) {
-        window.open(`https://wa.me/${formatted}?text=${encodeURIComponent(emergencyMsg)}`, "_blank");
+        window.open(
+          `https://wa.me/${formatted}?text=${encodeURIComponent(emergencyMsg)}`,
+          "_blank"
+        );
       }
     });
 
@@ -363,33 +395,32 @@ function Home() {
     }
 
     // Prevent spam
-    setUserVotes(prev => ({ ...prev, loading: reportId }));
+    setUserVotes((prev) => ({ ...prev, loading: reportId }));
 
     // Optimistic update
-    setReports(prev =>
-      prev.map(r =>
+    setReports((prev) =>
+      prev.map((r) =>
         r.id === reportId
           ? {
-            ...r,
-            upvotes:
-              type === "upvote"
-                ? r.upvotes + (userVotes[reportId] === "upvote" ? -1 : 1)
-                : r.upvotes + (userVotes[reportId] === "upvote" ? -1 : 0),
+              ...r,
+              upvotes:
+                type === "upvote"
+                  ? r.upvotes + (userVotes[reportId] === "upvote" ? -1 : 1)
+                  : r.upvotes + (userVotes[reportId] === "upvote" ? -1 : 0),
 
-            downvotes:
-              type === "downvote"
-                ? r.downvotes + (userVotes[reportId] === "downvote" ? -1 : 1)
-                : r.downvotes + (userVotes[reportId] === "downvote" ? -1 : 0),
-          }
+              downvotes:
+                type === "downvote"
+                  ? r.downvotes + (userVotes[reportId] === "downvote" ? -1 : 1)
+                  : r.downvotes + (userVotes[reportId] === "downvote" ? -1 : 0),
+            }
           : r
       )
     );
 
     // Save user’s new vote
-    setUserVotes(prev => ({
+    setUserVotes((prev) => ({
       ...prev,
-      [reportId]:
-        userVotes[reportId] === type ? null : type // toggle off if clicked again
+      [reportId]: userVotes[reportId] === type ? null : type, // toggle off if clicked again
     }));
 
     try {
@@ -397,9 +428,9 @@ function Home() {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ type, reportId })
+        body: JSON.stringify({ type, reportId }),
       });
 
       if (res.status === 401) {
@@ -410,12 +441,11 @@ function Home() {
 
       // Refresh from server
       getReports();
-
     } catch (err) {
       toast.error("Vote failed — try again.");
       console.error(err);
     } finally {
-      setUserVotes(prev => ({ ...prev, loading: null }));
+      setUserVotes((prev) => ({ ...prev, loading: null }));
     }
   };
 
@@ -433,8 +463,11 @@ function Home() {
 
     // parse location: if user left "lat, lng", convert to array of numbers
     let parsedLocation = editDraft.location;
-    if (typeof parsedLocation === 'string' && parsedLocation.includes(',')) {
-      const parts = parsedLocation.split(',').map(p => parseFloat(p.trim())).filter(n => !isNaN(n));
+    if (typeof parsedLocation === "string" && parsedLocation.includes(",")) {
+      const parts = parsedLocation
+        .split(",")
+        .map((p) => parseFloat(p.trim()))
+        .filter((n) => !isNaN(n));
       if (parts.length === 2) parsedLocation = parts;
     }
 
@@ -443,7 +476,7 @@ function Home() {
       description: editDraft.description,
       category: editDraft.category,
       location: parsedLocation,
-      image_url: editDraft.image_url
+      image_url: editDraft.image_url,
     };
 
     try {
@@ -451,9 +484,9 @@ function Home() {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -480,8 +513,8 @@ function Home() {
     const res = await fetch(`${base_url}/api/reports/resolve/${id}`, {
       method: "PUT",
       headers: {
-        Authorization: `Bearer ${token}` // 🔥 FIXED
-      }
+        Authorization: `Bearer ${token}`, // 🔥 FIXED
+      },
     });
 
     const data = await res.json();
@@ -496,40 +529,50 @@ function Home() {
   };
 
   const openEditForm = (report) => {
-    setEditReport(report);   // Opens your old submitForm-style UI
+    setEditReport(report); // Opens your old submitForm-style UI
   };
 
   const handleProfileSave = async (updatedUser) => {
-    try {
-      const res = await fetch(`${base_url}/api/sos/update`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({
-          contacts: updatedUser.sosNumbers,
-        }),
-      });
+  try {
+    // 1️⃣ Clean the contacts properly
+    const cleanedContacts = Array.isArray(updatedUser.sosNumbers)
+      ? updatedUser.sosNumbers
+          .map((n) => (typeof n === "string" ? n.trim() : n))
+          .filter((n) => n && n !== "" && n !== "{}")
+      : [];
 
-      const data = await res.json();
+    // 2️⃣ Now send this clean array to backend
+    const res = await fetch(`${base_url}/api/sos/update`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: JSON.stringify({ contacts: cleanedContacts }),
+    });
 
-      if (res.ok) {
-       setUser({
+    const data = await res.json();
+
+    // 3️⃣ Update frontend
+    if (res.ok) {
+      setUser({
         ...user,
         sosNumbers: Array.isArray(data.data.contacts)
           ? data.data.contacts
           : [""],
       });
 
-        setShowProfileModal(false);
-      } else {
-        console.error(data.error);
-      }
-    } catch (err) {
-      console.error("Failed to update SOS contacts:", err);
+      setShowProfileModal(false);
+    } else {
+      console.error(data.error);
+      toast.error("Failed to save SOS contacts");
     }
-  };
+  } catch (err) {
+    console.error("Failed to update SOS contacts:", err);
+    toast.error("Error updating SOS contacts");
+  }
+};
+
   useEffect(() => {
     const fetchContacts = async () => {
       try {
@@ -556,22 +599,25 @@ function Home() {
     fetchContacts();
   }, []);
 
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-[#1E1E1E] flex flex-col overflow-hidden">
       <Toaster
         position="top-center"
         toastOptions={{
           style: {
-            background: '#1E1E1E',
-            color: 'white',
-            border: '1px solid #333',
+            background: "#1E1E1E",
+            color: "white",
+            border: "1px solid #333",
           },
         }}
       />
 
       {/* Header - Always visible but can be minimal during navigation */}
-      <header className={`bg-[#1E1E1E] border-b border-gray-800 shadow-xl sticky top-0 z-40 flex-shrink-0 transition-all duration-300 ${isNavigating ? 'h-16' : ''}`}>
+      <header
+        className={`bg-[#1E1E1E] border-b border-gray-800 shadow-xl sticky top-0 z-40 flex-shrink-0 transition-all duration-300 ${
+          isNavigating ? "h-16" : ""
+        }`}
+      >
         <div className="w-full px-3 sm:px-4 py-3 flex justify-between items-center">
           {/* Left Section */}
           <div className="flex items-center gap-2 sm:gap-3">
@@ -588,7 +634,7 @@ function Home() {
                 <Navigation className="text-white w-4 h-4 sm:w-6 sm:h-6" />
               </div>
               <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-white whitespace-nowrap">
-                <span className='text-[#1975d8]'>Safe</span>Route
+                <span className="text-[#1975d8]">Safe</span>Route
               </h1>
             </div>
           </div>
@@ -600,7 +646,9 @@ function Home() {
               className="bg-gradient-to-r from-green-600 to-green-700 text-white p-2 sm:px-3 sm:py-2 lg:px-4 lg:py-2.5 rounded-xl flex items-center gap-1 sm:gap-2 hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95"
             >
               <Share2 className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="hidden sm:inline font-semibold text-sm lg:text-base">Share</span>
+              <span className="hidden sm:inline font-semibold text-sm lg:text-base">
+                Share
+              </span>
             </button>
 
             <button
@@ -608,7 +656,9 @@ function Home() {
               className="bg-gradient-to-r from-red-600 to-red-700 text-white p-2 sm:px-3 sm:py-2 lg:px-4 lg:py-2.5 rounded-xl flex items-center gap-1 sm:gap-2 hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 animate-pulse"
             >
               <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="hidden sm:inline font-semibold text-sm lg:text-base">SOS</span>
+              <span className="hidden sm:inline font-semibold text-sm lg:text-base">
+                SOS
+              </span>
             </button>
 
             {/* {userEmail ? (
@@ -672,10 +722,9 @@ function Home() {
         {userEmail && !isNavigating && (
           <div className="lg:hidden px-3 sm:px-4 pb-3">
             <div className="flex items-center justify-between bg-[#2C2C2C] rounded-xl px-3 py-2 border border-gray-700">
-
               <div
                 className="flex items-center gap-2 cursor-pointer"
-                onClick={() => setShowProfileModal(true)}   // 🔥 FIX: open modal
+                onClick={() => setShowProfileModal(true)} // 🔥 FIX: open modal
               >
                 <User className="text-[#1975d8] w-4 h-4" />
                 <span className="text-sm font-medium text-gray-200 truncate flex-1">
@@ -689,7 +738,6 @@ function Home() {
               >
                 Logout
               </button>
-
             </div>
           </div>
         )}
@@ -700,29 +748,36 @@ function Home() {
         <div className="h-full flex">
           {/* Sidebar - Hidden during navigation */}
           {!isNavigating && (
-            <div className={`
-              ${showSidebar ? 'translate-x-0 mt-14' : '-translate-x-full lg:translate-x-0'}
+            <div
+              className={`
+              ${
+                showSidebar
+                  ? "translate-x-0 mt-14"
+                  : "-translate-x-full lg:translate-x-0"
+              }
               fixed lg:relative inset-y-0 left-0 z-30
               w-full sm:w-96 lg:w-2/3 xl:w-1/3
               bg-[#1E1E1E] border-r border-gray-800
               transition-transform duration-300 ease-in-out
               overflow-hidden flex flex-col
-            `}>
+            `}
+            >
               <div className="flex-1 overflow-hidden flex flex-col p-3 sm:p-4">
                 {/* Tabs */}
                 <div className="bg-[#1E1E1E] rounded-xl sm:rounded-2xl border border-gray-800 overflow-hidden flex-shrink-0">
                   <nav className="flex">
                     {[
-                      { id: 'reports', icon: FileText, label: 'Reports' },
-                      { id: 'submit', icon: PlusCircle, label: 'Report' }
+                      { id: "reports", icon: FileText, label: "Reports" },
+                      { id: "submit", icon: PlusCircle, label: "Report" },
                     ].map((tab) => (
                       <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`flex-1 px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1 sm:gap-2 transition-all duration-200 ${activeTab === tab.id
-                          ? 'bg-[#1975d8] text-white'
-                          : 'text-gray-300 hover:text-white hover:bg-[#2C2C2C]'
-                          }`}
+                        className={`flex-1 px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1 sm:gap-2 transition-all duration-200 ${
+                          activeTab === tab.id
+                            ? "bg-[#1975d8] text-white"
+                            : "text-gray-300 hover:text-white hover:bg-[#2C2C2C]"
+                        }`}
                       >
                         <tab.icon className="w-4 h-4 sm:w-5 sm:h-5" />
                         <span className="hidden xs:inline">{tab.label}</span>
@@ -734,9 +789,8 @@ function Home() {
                 {/* Tab Content */}
                 <div className="flex-1 overflow-hidden bg-[#1E1E1E] rounded-xl sm:rounded-2xl border border-gray-800 mt-3 sm:mt-4 max-h-[80vh] ">
                   <div className="h-full  p-3 sm:p-4 overflow-auto">
-                    {activeTab === 'reports' && (
+                    {activeTab === "reports" && (
                       <div className="space-y-4">
-
                         {/* Header with Stats */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -744,9 +798,12 @@ function Home() {
                               <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                             </div>
                             <div>
-                              <h3 className="text-lg sm:text-xl font-bold text-white">Safety Reports</h3>
+                              <h3 className="text-lg sm:text-xl font-bold text-white">
+                                Safety Reports
+                              </h3>
                               <p className="text-xs text-gray-400">
-                               Recent {reports.length} {reports.length === 1 ? 'report' : 'reports'} 
+                                Recent {reports.length}{" "}
+                                {reports.length === 1 ? "report" : "reports"}
                               </p>
                             </div>
                           </div>
@@ -762,21 +819,36 @@ function Home() {
                           <div className="grid grid-cols-3 gap-2 mb-4">
                             <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-2 text-center">
                               <div className="text-red-400 font-bold text-sm">
-                                {reports.filter(r => r.category.toLowerCase() === 'danger').length}
+                                {
+                                  reports.filter(
+                                    (r) => r.category.toLowerCase() === "danger"
+                                  ).length
+                                }
                               </div>
                               <div className="text-red-400 text-xs">Danger</div>
                             </div>
 
                             <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-2 text-center">
                               <div className="text-yellow-400 font-bold text-sm">
-                                {reports.filter(r => r.category.toLowerCase() === 'caution').length}
+                                {
+                                  reports.filter(
+                                    (r) =>
+                                      r.category.toLowerCase() === "caution"
+                                  ).length
+                                }
                               </div>
-                              <div className="text-yellow-400 text-xs">Caution</div>
+                              <div className="text-yellow-400 text-xs">
+                                Caution
+                              </div>
                             </div>
 
                             <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-2 text-center">
                               <div className="text-green-400 font-bold text-sm">
-                                {reports.filter(r => r.category.toLowerCase() === 'safe').length}
+                                {
+                                  reports.filter(
+                                    (r) => r.category.toLowerCase() === "safe"
+                                  ).length
+                                }
                               </div>
                               <div className="text-green-400 text-xs">Safe</div>
                             </div>
@@ -790,63 +862,94 @@ function Home() {
                               <div className="w-16 h-16 mx-auto mb-3 bg-[#2C2C2C] rounded-full flex items-center justify-center">
                                 <FileText className="w-8 h-8 text-gray-500" />
                               </div>
-                              <h4 className="text-gray-300 font-semibold mb-1">No Reports Yet</h4>
-                              <p className="text-gray-500 text-sm">Be the first to report safety information in your area</p>
+                              <h4 className="text-gray-300 font-semibold mb-1">
+                                No Reports Yet
+                              </h4>
+                              <p className="text-gray-500 text-sm">
+                                Be the first to report safety information in
+                                your area
+                              </p>
                             </div>
                           ) : (
                             reports.map((report) => {
-                              const isDanger = report.category.toLowerCase() === 'danger';
-                              const isCaution = report.category.toLowerCase() === 'caution';
-                              const isSafe = report.category.toLowerCase() === 'safe';
-                              const isOwner = userId && report.created_by == userId;
+                              const isDanger =
+                                report.category.toLowerCase() === "danger";
+                              const isCaution =
+                                report.category.toLowerCase() === "caution";
+                              const isSafe =
+                                report.category.toLowerCase() === "safe";
+                              const isOwner =
+                                userId && report.created_by == userId;
 
                               return (
                                 <div
                                   key={report.id}
                                   className={`
                 group relative p-4 rounded-2xl border-2 transition-all duration-300 hover:scale-[0.99] hover:shadow-2xl cursor-pointer
-                ${isDanger
-                                      ? 'bg-gradient-to-br from-red-500/5 to-red-500/10 border-red-500/30'
-                                      : isCaution
-                                        ? 'bg-gradient-to-br from-yellow-500/5 to-yellow-500/10 border-yellow-500/30'
-                                        : 'bg-gradient-to-br from-green-500/5 to-green-500/10 border-green-500/30'}
+                ${
+                  isDanger
+                    ? "bg-gradient-to-br from-red-500/5 to-red-500/10 border-red-500/30"
+                    : isCaution
+                    ? "bg-gradient-to-br from-yellow-500/5 to-yellow-500/10 border-yellow-500/30"
+                    : "bg-gradient-to-br from-green-500/5 to-green-500/10 border-green-500/30"
+                }
               `}
                                 >
-
                                   {/* Glow effect */}
-                                  <div className={`
+                                  <div
+                                    className={`
                 absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 blur-sm
-                ${isDanger ? 'bg-red-500/20' : isCaution ? 'bg-yellow-500/20' : 'bg-green-500/20'}
-              `}></div>
+                ${
+                  isDanger
+                    ? "bg-red-500/20"
+                    : isCaution
+                    ? "bg-yellow-500/20"
+                    : "bg-green-500/20"
+                }
+              `}
+                                  ></div>
 
                                   <div className="relative z-10">
-
                                     {/* Header */}
                                     <div className="flex items-start justify-between mb-3">
                                       <div className="flex items-center gap-2">
-                                        <div className={`
+                                        <div
+                                          className={`
                       w-3 h-3 rounded-full animate-pulse
-                      ${isDanger ? 'bg-red-500' : isCaution ? 'bg-yellow-500' : 'bg-green-500'}
-                    `}></div>
+                      ${
+                        isDanger
+                          ? "bg-red-500"
+                          : isCaution
+                          ? "bg-yellow-500"
+                          : "bg-green-500"
+                      }
+                    `}
+                                        ></div>
 
-                                        <span className={`
+                                        <span
+                                          className={`
                       text-sm font-bold px-3 py-1 rounded-full border
-                      ${isDanger
-                                            ? 'bg-red-500/20 text-red-300 border-red-500/40'
-                                            : isCaution
-                                              ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40'
-                                              : 'bg-green-500/20 text-green-300 border-green-500/40'}
-                    `}>
+                      ${
+                        isDanger
+                          ? "bg-red-500/20 text-red-300 border-red-500/40"
+                          : isCaution
+                          ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/40"
+                          : "bg-green-500/20 text-green-300 border-green-500/40"
+                      }
+                    `}
+                                        >
                                           {report.category}
                                         </span>
                                       </div>
 
                                       <span className="text-xs text-gray-400 bg-[#1E1E1E] px-2 py-1 rounded-lg border border-gray-700">
-                                        {new Date(report.date).toLocaleDateString('en-US', {
-                                          month: 'short',
-                                          day: 'numeric',
-                                          hour: '2-digit',
-                                          minute: '2-digit'
+                                        {new Date(
+                                          report.date
+                                        ).toLocaleDateString("en-US", {
+                                          month: "short",
+                                          day: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
                                         })}
                                       </span>
                                     </div>
@@ -873,58 +976,93 @@ function Home() {
                                         <MapPin className="w-4 h-4" />
                                         <span className="text-xs font-mono">
                                           {Array.isArray(report.location)
-                                            ? `${report.location[0].toFixed(4)}, ${report.location[1].toFixed(4)}`
-                                            : 'Location not available'}
+                                            ? `${report.location[0].toFixed(
+                                                4
+                                              )}, ${report.location[1].toFixed(
+                                                4
+                                              )}`
+                                            : "Location not available"}
                                         </span>
                                       </div>
 
                                       {/* Voting */}
                                       <div className="flex items-center gap-3 mt-2">
                                         <button
-                                          disabled={userVotes.loading === report.id}
-                                          onClick={() => handleVote(report.id, "upvote")}
+                                          disabled={
+                                            userVotes.loading === report.id
+                                          }
+                                          onClick={() =>
+                                            handleVote(report.id, "upvote")
+                                          }
                                           className={`
                         flex items-center gap-1 text-sm px-2 py-1 rounded-md transition-colors
-                        ${userVotes[report.id] === "upvote"
-                                              ? "text-green-500 bg-green-500/10"
-                                              : "text-gray-400 hover:text-green-400 hover:bg-green-500/10"}
-                        ${userVotes.loading === report.id && "opacity-50 cursor-not-allowed"}
+                        ${
+                          userVotes[report.id] === "upvote"
+                            ? "text-green-500 bg-green-500/10"
+                            : "text-gray-400 hover:text-green-400 hover:bg-green-500/10"
+                        }
+                        ${
+                          userVotes.loading === report.id &&
+                          "opacity-50 cursor-not-allowed"
+                        }
                       `}
                                         >
-                                          {userVotes[report.id] === "upvote" ? "⬆️" : "⬆"} {report.upvotes}
+                                          {userVotes[report.id] === "upvote"
+                                            ? "⬆️"
+                                            : "⬆"}{" "}
+                                          {report.upvotes}
                                         </button>
 
                                         <button
-                                          disabled={userVotes.loading === report.id}
-                                          onClick={() => handleVote(report.id, "downvote")}
+                                          disabled={
+                                            userVotes.loading === report.id
+                                          }
+                                          onClick={() =>
+                                            handleVote(report.id, "downvote")
+                                          }
                                           className={`
                         flex items-center gap-1 text-sm px-2 py-1 rounded-md transition-colors
-                        ${userVotes[report.id] === "downvote"
-                                              ? "text-red-500 bg-red-500/10"
-                                              : "text-gray-400 hover:text-red-400 hover:bg-red-500/10"}
-                        ${userVotes.loading === report.id && "opacity-50 cursor-not-allowed"}
+                        ${
+                          userVotes[report.id] === "downvote"
+                            ? "text-red-500 bg-red-500/10"
+                            : "text-gray-400 hover:text-red-400 hover:bg-red-500/10"
+                        }
+                        ${
+                          userVotes.loading === report.id &&
+                          "opacity-50 cursor-not-allowed"
+                        }
                       `}
                                         >
-                                          {userVotes[report.id] === "downvote" ? "⬇️" : "⬇"} {report.downvotes}
+                                          {userVotes[report.id] === "downvote"
+                                            ? "⬇️"
+                                            : "⬇"}{" "}
+                                          {report.downvotes}
                                         </button>
                                       </div>
 
-                                      <div className={`
+                                      <div
+                                        className={`
                     px-2 py-1 rounded-lg text-xs font-semibold
-                    ${isDanger
-                                          ? 'bg-red-500/20 text-red-300'
+                    ${
+                      isDanger
+                        ? "bg-red-500/20 text-red-300"
+                        : isCaution
+                        ? "bg-yellow-500/20 text-yellow-300"
+                        : "bg-green-500/20 text-green-300"
+                    }
+                  `}
+                                      >
+                                        {isDanger
+                                          ? "🚨 High Risk"
                                           : isCaution
-                                            ? 'bg-yellow-500/20 text-yellow-300'
-                                            : 'bg-green-500/20 text-green-300'}
-                  `}>
-                                        {isDanger ? '🚨 High Risk' : isCaution ? '⚠️ Be Cautious' : '✅ Safe Area'}
+                                          ? "⚠️ Be Cautious"
+                                          : "✅ Safe Area"}
                                       </div>
                                     </div>
 
                                     {/* OWNER-ONLY ACTIONS */}
                                     {isOwner && (
                                       <div className="flex items-center justify-end gap-3 mt-3">
-
                                         {/* EDIT BUTTON */}
                                         <button
                                           onClick={() => openEditForm(report)}
@@ -942,28 +1080,38 @@ function Home() {
                                             if (!ok) return;
 
                                             try {
-                                              await deletePost(report.id);   // 🔥 use your existing delete logic
-                                              toast.success("Report marked as resolved");
+                                              await deletePost(report.id); // 🔥 use your existing delete logic
+                                              toast.success(
+                                                "Report marked as resolved"
+                                              );
                                             } catch (err) {
                                               console.error(err);
-                                              toast.error("Failed to mark resolved");
+                                              toast.error(
+                                                "Failed to mark resolved"
+                                              );
                                             }
                                           }}
                                           className="px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700"
                                         >
                                           Mark as Resolved
                                         </button>
-
                                       </div>
                                     )}
-                                    
+
                                     {/* Hover underline */}
-                                    <div className={`
+                                    <div
+                                      className={`
                   absolute bottom-0 left-1/2 transform -translate-x-1/2 w-0 h-0.5 rounded-full
                   group-hover:w-3/4 transition-all duration-300
-                  ${isDanger ? 'bg-red-500' : isCaution ? 'bg-yellow-500' : 'bg-green-500'}
-                `}></div>
-
+                  ${
+                    isDanger
+                      ? "bg-red-500"
+                      : isCaution
+                      ? "bg-yellow-500"
+                      : "bg-green-500"
+                  }
+                `}
+                                    ></div>
                                   </div>
                                 </div>
                               );
@@ -973,7 +1121,7 @@ function Home() {
                       </div>
                     )}
 
-                    {activeTab === 'submit' && (
+                    {activeTab === "submit" && (
                       <div className="h-full">
                         <ReportForm onSubmit={handleReportSubmit} />
                       </div>
@@ -985,11 +1133,13 @@ function Home() {
           )}
 
           {/* Map Container - Full screen during navigation */}
-          <div className={`
-            ${isNavigating ? 'w-full' : showSidebar ? 'hidden lg:flex' : 'flex'}
+          <div
+            className={`
+            ${isNavigating ? "w-full" : showSidebar ? "hidden lg:flex" : "flex"}
             flex-1 min-w-0 
             transition-all duration-300
-          `}>
+          `}
+          >
             <div className="flex-1 bg-[#1E1E1E] rounded-none lg:rounded-2xl overflow-hidden relative">
               <Map
                 reports={reports}
@@ -1004,7 +1154,9 @@ function Home() {
                   <div className="bg-[#1E1E1E]/95 backdrop-blur-sm rounded-2xl border border-gray-700 shadow-2xl p-2 sm:p-4">
                     <div className="flex items-center gap-3 mb-2">
                       <RouteIcon className="w-3 h-3 text-[#1975d8]" />
-                      <h2 className="text-md sm:text-md font-bold text-white">Route Planning</h2>
+                      <h2 className="text-md sm:text-md font-bold text-white">
+                        Route Planning
+                      </h2>
                     </div>
                     <RouteForm
                       onRouteSubmit={handleRouteSubmit}
@@ -1039,11 +1191,16 @@ function Home() {
         {/* Mobile Report Form Overlay */}
         {showReportForm && (
           <div className="fixed inset-0 z-50 lg:hidden">
-            <div className="absolute inset-0 bg-black/50" onClick={closeReportForm} />
+            <div
+              className="absolute inset-0 bg-black/50"
+              onClick={closeReportForm}
+            />
             <div className="absolute inset-0 flex items-center justify-center p-4">
               <div className="bg-[#1E1E1E] rounded-2xl border border-gray-700 w-full max-w-2xl max-h-[90vh] overflow-hidden">
                 <div className="p-4 border-b border-gray-700 flex justify-between items-center">
-                  <h2 className="text-lg font-semibold text-white">Report Incident</h2>
+                  <h2 className="text-lg font-semibold text-white">
+                    Report Incident
+                  </h2>
                   <button
                     onClick={closeReportForm}
                     className="text-gray-400 hover:text-white transition-colors"
@@ -1069,13 +1226,11 @@ function Home() {
         {/* ===== EDIT REPORT MODAL (GLOBAL, ALWAYS CENTERED) ===== */}
         {editReport && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-
             <div
               className="relative bg-[#1E1E1E] w-full max-w-xl mx-4 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden animate-fadeInUp"
               onClick={(e) => e.stopPropagation()}
               style={{ maxHeight: "85vh" }}
             >
-
               {/* Close Button */}
               <button
                 onClick={() => setEditReport(null)}
@@ -1084,16 +1239,19 @@ function Home() {
                 <X size={22} />
               </button>
 
-              <div className="p-5 overflow-y-auto custom-scrollbar" style={{ maxHeight: "calc(85vh - 40px)" }}>
+              <div
+                className="p-5 overflow-y-auto custom-scrollbar"
+                style={{ maxHeight: "calc(85vh - 40px)" }}
+              >
                 <form onSubmit={handleUpdateReport} className="space-y-5">
-
                   {/* IMAGE */}
                   <div className="flex flex-col items-center gap-3">
-
                     {/* IMAGE / PLACEHOLDER */}
                     <div
                       className="w-full h-64 flex items-center justify-center bg-[#2C2C2C] border border-gray-700 rounded-xl cursor-pointer hover:bg-[#3a3a3a] transition"
-                      onClick={() => document.getElementById("edit-image-input").click()}
+                      onClick={() =>
+                        document.getElementById("edit-image-input").click()
+                      }
                     >
                       {editDraft.image_url ? (
                         <img
@@ -1103,7 +1261,10 @@ function Home() {
                         />
                       ) : (
                         <p className="text-gray-400 text-sm text-center px-4">
-                          No Image — <span className="text-blue-400 underline">Click to add image</span>
+                          No Image —{" "}
+                          <span className="text-blue-400 underline">
+                            Click to add image
+                          </span>
                         </p>
                       )}
                     </div>
@@ -1111,7 +1272,9 @@ function Home() {
                     {/* REMOVE IMAGE BUTTON */}
                     {editDraft.image_url && (
                       <button
-                        onClick={() => setEditDraft(prev => ({ ...prev, image_url: "" }))}
+                        onClick={() =>
+                          setEditDraft((prev) => ({ ...prev, image_url: "" }))
+                        }
                         className="px-3 py-1 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
                       >
                         Remove Image
@@ -1129,7 +1292,10 @@ function Home() {
                         if (file) {
                           const reader = new FileReader();
                           reader.onloadend = () => {
-                            setEditDraft(prev => ({ ...prev, image_url: reader.result }));
+                            setEditDraft((prev) => ({
+                              ...prev,
+                              image_url: reader.result,
+                            }));
                           };
                           reader.readAsDataURL(file);
                         }
@@ -1137,14 +1303,18 @@ function Home() {
                     />
                   </div>
 
-
                   {/* DESCRIPTION */}
                   <div>
                     <label className="text-sm text-gray-300">Description</label>
                     <textarea
                       rows="4"
                       value={editDraft.description}
-                      onChange={(e) => setEditDraft(prev => ({ ...prev, description: e.target.value }))}
+                      onChange={(e) =>
+                        setEditDraft((prev) => ({
+                          ...prev,
+                          description: e.target.value,
+                        }))
+                      }
                       className="w-full p-3 rounded-lg bg-[#2C2C2C] border border-gray-700 text-white"
                     />
                   </div>
@@ -1154,7 +1324,12 @@ function Home() {
                     <label className="text-sm text-gray-300">Category</label>
                     <select
                       value={editDraft.category}
-                      onChange={(e) => setEditDraft(prev => ({ ...prev, category: e.target.value }))}
+                      onChange={(e) =>
+                        setEditDraft((prev) => ({
+                          ...prev,
+                          category: e.target.value,
+                        }))
+                      }
                       className="w-full p-3 rounded-lg bg-[#2C2C2C] border border-gray-700 text-white"
                     >
                       <option value="danger">Danger 🚨</option>
@@ -1181,15 +1356,12 @@ function Home() {
                   </div>
                 </form>
               </div>
-
             </div>
           </div>
         )}
         {showProfileModal && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-
             <div className="relative bg-[#1f1f1f] text-white rounded-xl w-[420px] p-6 shadow-xl border border-gray-700">
-
               {/* CLOSE BUTTON (X) */}
               <button
                 onClick={() => setShowProfileModal(false)}
@@ -1201,16 +1373,20 @@ function Home() {
               {/* Tabs */}
               <div className="flex border-b border-gray-600 mb-4">
                 <button
-                  className={`px-3 py-2 ${profileTab === 'profile' ? 'border-b-2 border-blue-500' : ''}`}
-                  onClick={() => setProfileTab('profile')}
+                  className={`px-3 py-2 ${
+                    profileTab === "profile" ? "border-b-2 border-blue-500" : ""
+                  }`}
+                  onClick={() => setProfileTab("profile")}
                 >
                   Profile
                 </button>
 
                 <button
-                  className={`px-3 py-2 ml-4 ${profileTab === 'posts' ? 'border-b-2 border-blue-500' : ''}`}
+                  className={`px-3 py-2 ml-4 ${
+                    profileTab === "posts" ? "border-b-2 border-blue-500" : ""
+                  }`}
                   onClick={() => {
-                    setProfileTab('posts');
+                    setProfileTab("posts");
                     fetchMyPosts();
                   }}
                 >
@@ -1223,7 +1399,10 @@ function Home() {
                 <>
                   <h2 className="text-xl font-semibold mb-5">Edit Profile</h2>
                   <label className="text-sm font-medium">SOS Numbers</label>
-                  {(Array.isArray(user.sosNumbers) ? user.sosNumbers : [""]).map((num, i) => (
+                  {(Array.isArray(user.sosNumbers)
+                    ? user.sosNumbers
+                    : [""]
+                  ).map((num, i) => (
                     <div key={i} className="flex gap-2 mt-2">
                       <input
                         type="text"
@@ -1238,7 +1417,9 @@ function Home() {
                       {user.sosNumbers.length > 1 && (
                         <button
                           onClick={() => {
-                            let arr = user.sosNumbers.filter((_, idx) => idx !== i);
+                            let arr = user.sosNumbers.filter(
+                              (_, idx) => idx !== i
+                            );
                             setUser({ ...user, sosNumbers: arr });
                           }}
                           className="bg-red-600 px-3 rounded-lg"
@@ -1278,13 +1459,16 @@ function Home() {
               {/* My Posts Tab */}
               {profileTab === "posts" && (
                 <div className="max-h-[400px] overflow-y-auto">
-
                   {myPosts.length === 0 ? (
-                    <p className="text-gray-400 text-sm">You haven't created any posts.</p>
+                    <p className="text-gray-400 text-sm">
+                      You haven't created any posts.
+                    </p>
                   ) : (
                     myPosts.map((post) => (
-                      <div key={post.id} className="bg-[#2b2b2b] p-3 rounded-lg mb-3">
-
+                      <div
+                        key={post.id}
+                        className="bg-[#2b2b2b] p-3 rounded-lg mb-3"
+                      >
                         {/* IMAGE */}
                         {post.image_url && (
                           <img
@@ -1307,10 +1491,12 @@ function Home() {
 
                         <div className="flex gap-2 mt-3">
                           <button
-                            onClick={() => setEditReport({
-                              ...post,
-                              category: post.category || post.type
-                            })}   // 🔥 next step fixes this
+                            onClick={() =>
+                              setEditReport({
+                                ...post,
+                                category: post.category || post.type,
+                              })
+                            } // 🔥 next step fixes this
                             className="bg-blue-600 px-3 py-1 rounded-lg text-sm"
                           >
                             Edit
@@ -1328,11 +1514,9 @@ function Home() {
                   )}
                 </div>
               )}
-
             </div>
           </div>
         )}
-
       </div>
     </div>
   );

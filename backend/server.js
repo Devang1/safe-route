@@ -755,6 +755,9 @@ app.get("/api/sos/get", authMiddleware, async (req, res) => {
 app.put("/api/sos/update", authMiddleware, async (req, res) => {
   const userEmail = req.user.email; // email from JWT
   const { contacts } = req.body; // array of numbers
+  console.log("RAW CONTACTS RECEIVED:", req.body.contacts);
+console.log("TYPE:", typeof req.body.contacts);
+
 
   if (!Array.isArray(contacts)) {
     return res.status(400).json({ error: "contacts must be an array" });
@@ -776,7 +779,8 @@ app.put("/api/sos/update", authMiddleware, async (req, res) => {
          SET contacts=$1 
          WHERE email=$2 
          RETURNING *`,
-        [contacts, userEmail]
+        [JSON.stringify(contacts), userEmail]
+
       );
     } else {
       // Insert
