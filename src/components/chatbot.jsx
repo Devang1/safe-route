@@ -307,7 +307,10 @@ export default function SafeRouteChatbot({ currentLocation }) {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 bg-white shadow-2xl w-80 rounded-2xl overflow-hidden flex flex-col border border-gray-300 max-h-[500px] min-h-[500px]">
+    <div className="fixed bottom-6 right-6 bg-white shadow-2xl w-80 rounded-2xl overflow-hidden flex flex-col border border-gray-300 h-[70vh] max-h-[600px] min-h-[400px]
+    sm:h-[75vh]
+    md:h-[65vh]
+    lg:h-[60vh]">
       {/* Header */}
       <div className="bg-gradient-to-r from-gray-800 to-blue-900 text-white p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">

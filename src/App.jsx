@@ -7,6 +7,7 @@ import { BrowserRouter, Route, Routes, useNavigate } from "react-router-dom";
 import Login from "./components/auth/index";
 import { toast, Toaster } from 'react-hot-toast';
 import SafeRouteChatbot from './components/chatbot';
+import { jwtDecode } from 'jwt-decode';
 
 function Home() {
   const [reports, setReports] = useState([]);
@@ -21,12 +22,96 @@ function Home() {
   const [isPlanningRoute, setIsPlanningRoute] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false); // New state for mobile report form
+  const [userVotes, setUserVotes] = useState({});
+  const [editReport, setEditReport] = useState(null); // opens edit form
+  const [editDraft, setEditDraft] = useState({
+    title: '',
+    description: '',
+    category: 'danger',
+    image_url: ''
+  });
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [user, setUser] = useState({ sosNumbers: [""] });
+  const [profileTab, setProfileTab] = useState("profile");
+  const [myPosts, setMyPosts] = useState([]);
+  // const token = localStorage.getItem("token");
+  // const userId = jwtDecode(token).id;
+  const token = localStorage.getItem("token");
+
+  let decodedUser = null;
+  let userId = null;
+
+  if (token) {
+    try {
+      decodedUser = jwtDecode(token);
+      userId = decodedUser.id;
+    } catch (err) {
+      console.error("JWT error, clearing token:", err);
+      localStorage.removeItem("token");
+    }
+  }
+
+  console.log("Decoded user ID:", userId);
   const base_url = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+  // Function to fetch reports
+  const getReports = async () => {
+    try {
+      const res = await fetch(`${base_url}/api/reportsDetails`);
+      const data = await res.json();
+      setReports(data);
+    } catch (err) {
+      console.error("Failed to fetch reports:", err);
+    }
+  };
+
+  const fetchMyPosts = async () => {
+    try {
+      const res = await fetch(`${base_url}/api/my-reports`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+
+      const data = await res.json();
+      setMyPosts(
+        (data.reports || []).map((p) => ({
+          ...p,
+          location: [Number(p.latitude), Number(p.longitude)]
+        }))
+      );
+
+    } catch (err) {
+      console.error("Failed to load posts:", err);
+    }
+  };
+
+  const deletePost = async (id) => {
+    const ok = window.confirm("Are you sure you want to delete this post?");
+    if (!ok) return;
+
+    try {
+      await fetch(`${base_url}/api/report/delete/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+
+      fetchMyPosts();
+      getReports();
+    } catch (err) {
+      console.error("Delete failed:", err);
+    }
+  };
+
+
   useEffect(() => {
-    fetch(`${base_url}/api/reportsDetails`)
-      .then(res => res.json())
-      .then(data => setReports(data))
-      .catch(err => console.error('Failed to fetch reports:', err));
+    // fetch(`${base_url}/api/reportsDetails`)
+    //   .then(res => res.json())
+    //   .then(data => setReports(data))
+    //   .catch(err => console.error('Failed to fetch reports:', err));
+    getReports();
     console.log("Fetched reports:", reports);
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -64,6 +149,26 @@ function Home() {
       window.removeEventListener('navigationStateChange', handleNavigationStateChange);
     };
   }, []);
+  useEffect(() => {
+    if (editReport) {
+      setEditDraft({
+        description: editReport.description || '',
+        category: editReport.category || 'danger',
+        // convert array location to "lat, lng" string for input
+        location: Array.isArray(editReport.location)
+          ? `${editReport.location[0]}, ${editReport.location[1]}`
+          : editReport.location || '',
+        image_url: editReport.image_url || ''
+      });
+
+      // lock scroll while modal open
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => { document.body.style.overflow = ''; };
+  }, [editReport]);
 
   const handleReportSubmit = (report) => {
     const newReport = { ...report, id: Date.now().toString() };
@@ -212,43 +317,243 @@ function Home() {
   };
 
   // Called after user clicks upvote/downvote
+  // const handleVote = async (reportId, type) => {
+  //   try {
+  //     console.log("handleVote called with:", { reportId, type });
+  //     const res = await fetch(`${base_url}/api/vote`, {
+  //       method: "PUT",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ type, reportId }),
+  //     });
+
+  //     const data = await res.json();
+
+  //     if (res.ok) {
+  //       // ✅ Update UI instantly
+  //       setReports(prevReports =>
+  //         prevReports.map(report =>
+  //           report.id === reportId
+  //             ? {
+  //               ...report,
+  //               upvotes:
+  //                 type === "upvote"
+  //                   ? report.upvotes + 1
+  //                   : report.upvotes,
+  //               downvotes:
+  //                 type === "downvote"
+  //                   ? report.downvotes + 1
+  //                   : report.downvotes,
+  //             }
+  //             : report
+  //         )
+  //       );
+  //     } else {
+  //       console.error(data.error);
+  //     }
+  //   } catch (err) {
+  //     console.error("Vote error:", err);
+  //   }
+  // };
   const handleVote = async (reportId, type) => {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      toast.error("Please log in to vote.");
+      return;
+    }
+
+    // Prevent spam
+    setUserVotes(prev => ({ ...prev, loading: reportId }));
+
+    // Optimistic update
+    setReports(prev =>
+      prev.map(r =>
+        r.id === reportId
+          ? {
+            ...r,
+            upvotes:
+              type === "upvote"
+                ? r.upvotes + (userVotes[reportId] === "upvote" ? -1 : 1)
+                : r.upvotes + (userVotes[reportId] === "upvote" ? -1 : 0),
+
+            downvotes:
+              type === "downvote"
+                ? r.downvotes + (userVotes[reportId] === "downvote" ? -1 : 1)
+                : r.downvotes + (userVotes[reportId] === "downvote" ? -1 : 0),
+          }
+          : r
+      )
+    );
+
+    // Save user’s new vote
+    setUserVotes(prev => ({
+      ...prev,
+      [reportId]:
+        userVotes[reportId] === type ? null : type // toggle off if clicked again
+    }));
+
     try {
-      console.log("handleVote called with:", { reportId, type });
       const res = await fetch(`${base_url}/api/vote`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, reportId }),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ type, reportId })
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem("token");
+        toast.error("Session expired. Please log in again.");
+        return;
+      }
+
+      // Refresh from server
+      getReports();
+
+    } catch (err) {
+      toast.error("Vote failed — try again.");
+      console.error(err);
+    } finally {
+      setUserVotes(prev => ({ ...prev, loading: null }));
+    }
+  };
+
+  // handle report update submission
+  const handleUpdateReport = async (e) => {
+    e.preventDefault();
+
+    if (!editReport) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Please login to update report.");
+      return;
+    }
+
+    // parse location: if user left "lat, lng", convert to array of numbers
+    let parsedLocation = editDraft.location;
+    if (typeof parsedLocation === 'string' && parsedLocation.includes(',')) {
+      const parts = parsedLocation.split(',').map(p => parseFloat(p.trim())).filter(n => !isNaN(n));
+      if (parts.length === 2) parsedLocation = parts;
+    }
+
+    const body = {
+      title: editDraft.title,
+      description: editDraft.description,
+      category: editDraft.category,
+      location: parsedLocation,
+      image_url: editDraft.image_url
+    };
+
+    try {
+      const res = await fetch(`${base_url}/api/reports/${editReport.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(body)
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.message || "Update failed");
+        return;
+      }
+
+      toast.success("Report updated");
+      setEditReport(null);
+      getReports();
+      fetchMyPosts();
+    } catch (err) {
+      console.error("Update error:", err);
+      toast.error("Update failed — check console");
+    }
+  };
+
+  // handle resolve report
+  const handleResolve = async (id) => {
+    const token = localStorage.getItem("token");
+
+    const res = await fetch(`${base_url}/api/reports/resolve/${id}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}` // 🔥 FIXED
+      }
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      toast.error(data.message || "Failed to resolve");
+      return;
+    }
+
+    toast.success("Report marked resolved!");
+    getReports(); // 🔥 FIXED
+  };
+
+  const openEditForm = (report) => {
+    setEditReport(report);   // Opens your old submitForm-style UI
+  };
+
+  const handleProfileSave = async (updatedUser) => {
+    try {
+      const res = await fetch(`${base_url}/api/sos/update`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          contacts: updatedUser.sosNumbers,
+        }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        // ✅ Update UI instantly
-        setReports(prevReports =>
-          prevReports.map(report =>
-            report.id === reportId
-              ? {
-                ...report,
-                upvotes:
-                  type === "upvote"
-                    ? report.upvotes + 1
-                    : report.upvotes,
-                downvotes:
-                  type === "downvote"
-                    ? report.downvotes + 1
-                    : report.downvotes,
-              }
-              : report
-          )
-        );
+        setUser({
+          ...user,
+          sosNumbers: data.data.contacts,
+        });
+
+        setShowProfileModal(false);
       } else {
         console.error(data.error);
       }
     } catch (err) {
-      console.error("Vote error:", err);
+      console.error("Failed to update SOS contacts:", err);
     }
   };
+  useEffect(() => {
+    const fetchContacts = async () => {
+      try {
+        const res = await fetch(`${base_url}/api/sos/get`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          setUser((prev) => ({
+            ...prev,
+            sosNumbers: data.contacts || [""],
+          }));
+        }
+      } catch (err) {
+        console.log("Error fetching contacts:", err);
+      }
+    };
+
+    fetchContacts();
+  }, []);
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-[#1E1E1E] flex flex-col overflow-hidden">
@@ -304,7 +609,7 @@ function Home() {
               <span className="hidden sm:inline font-semibold text-sm lg:text-base">SOS</span>
             </button>
 
-            {userEmail ? (
+            {/* {userEmail ? (
               <div className="hidden lg:flex items-center gap-2 bg-[#2C2C2C] rounded-xl px-3 py-2 border border-gray-700">
                 <User className="text-[#1975d8] w-4 h-4" />
                 <span className="text-sm font-medium text-gray-200 truncate max-w-[100px] xl:max-w-[120px]">
@@ -325,6 +630,38 @@ function Home() {
                 <User className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="hidden sm:inline font-semibold text-sm lg:text-base">Login/Signup</span>
               </button>
+            )} */}
+            {userEmail ? (
+              <div className="hidden lg:flex items-center gap-2 bg-[#2C2C2C] rounded-xl px-3 py-2 border border-gray-700">
+                <User className="text-[#1975d8] w-4 h-4" />
+
+                {/* CLICKABLE EMAIL / NAME → OPEN PROFILE MODAL */}
+                <span
+                  onClick={() => setShowProfileModal(true)}
+                  className="text-sm font-medium text-gray-200 truncate max-w-[100px] xl:max-w-[120px] cursor-pointer hover:text-white transition"
+                  title="Edit Profile"
+                >
+                  {userEmail}
+                </span>
+
+                {/* LOGOUT BUTTON */}
+                <button
+                  onClick={logout}
+                  className="bg-red-600 hover:bg-red-700 text-white p-1 rounded-lg transition-all duration-200 hover:scale-110"
+                >
+                  <LogOut className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => navigate("/login")}
+                className="bg-gradient-to-r from-[#1975d8] to-blue-600 text-white p-2 sm:px-4 sm:py-2 lg:px-6 lg:py-2.5 rounded-xl flex items-center gap-1 sm:gap-2 hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95"
+              >
+                <User className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline font-semibold text-sm lg:text-base">
+                  Login/Signup
+                </span>
+              </button>
             )}
           </div>
         </div>
@@ -333,18 +670,24 @@ function Home() {
         {userEmail && !isNavigating && (
           <div className="lg:hidden px-3 sm:px-4 pb-3">
             <div className="flex items-center justify-between bg-[#2C2C2C] rounded-xl px-3 py-2 border border-gray-700">
-              <div className="flex items-center gap-2">
+
+              <div
+                className="flex items-center gap-2 cursor-pointer"
+                onClick={() => setShowProfileModal(true)}   // 🔥 FIX: open modal
+              >
                 <User className="text-[#1975d8] w-4 h-4" />
                 <span className="text-sm font-medium text-gray-200 truncate flex-1">
                   {userEmail}
                 </span>
               </div>
+
               <button
                 onClick={logout}
                 className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg transition-all duration-200 text-sm ml-2"
               >
                 Logout
               </button>
+
             </div>
           </div>
         )}
@@ -391,6 +734,7 @@ function Home() {
                   <div className="h-full  p-3 sm:p-4 overflow-auto">
                     {activeTab === 'reports' && (
                       <div className="space-y-4">
+
                         {/* Header with Stats */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -400,7 +744,7 @@ function Home() {
                             <div>
                               <h3 className="text-lg sm:text-xl font-bold text-white">Safety Reports</h3>
                               <p className="text-xs text-gray-400">
-                                {reports.length} {reports.length === 1 ? 'report' : 'reports'} in your area
+                               Recent {reports.length} {reports.length === 1 ? 'report' : 'reports'} 
                               </p>
                             </div>
                           </div>
@@ -420,12 +764,14 @@ function Home() {
                               </div>
                               <div className="text-red-400 text-xs">Danger</div>
                             </div>
+
                             <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-2 text-center">
                               <div className="text-yellow-400 font-bold text-sm">
                                 {reports.filter(r => r.category.toLowerCase() === 'caution').length}
                               </div>
                               <div className="text-yellow-400 text-xs">Caution</div>
                             </div>
+
                             <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-2 text-center">
                               <div className="text-green-400 font-bold text-sm">
                                 {reports.filter(r => r.category.toLowerCase() === 'safe').length}
@@ -450,6 +796,7 @@ function Home() {
                               const isDanger = report.category.toLowerCase() === 'danger';
                               const isCaution = report.category.toLowerCase() === 'caution';
                               const isSafe = report.category.toLowerCase() === 'safe';
+                              const isOwner = userId && report.created_by == userId;
 
                               return (
                                 <div
@@ -457,20 +804,21 @@ function Home() {
                                   className={`
                 group relative p-4 rounded-2xl border-2 transition-all duration-300 hover:scale-[0.99] hover:shadow-2xl cursor-pointer
                 ${isDanger
-                                      ? 'bg-gradient-to-br from-red-500/5 to-red-500/10 border-red-500/30 '
+                                      ? 'bg-gradient-to-br from-red-500/5 to-red-500/10 border-red-500/30'
                                       : isCaution
                                         ? 'bg-gradient-to-br from-yellow-500/5 to-yellow-500/10 border-yellow-500/30'
-                                        : 'bg-gradient-to-br from-green-500/5 to-green-500/10 border-green-500/30 '
-                                    }
+                                        : 'bg-gradient-to-br from-green-500/5 to-green-500/10 border-green-500/30'}
               `}
                                 >
+
                                   {/* Glow effect */}
                                   <div className={`
-                absolute inset-0 rounded-2xl opacity-0  transition-opacity duration-300 blur-sm
+                absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 blur-sm
                 ${isDanger ? 'bg-red-500/20' : isCaution ? 'bg-yellow-500/20' : 'bg-green-500/20'}
               `}></div>
 
                                   <div className="relative z-10">
+
                                     {/* Header */}
                                     <div className="flex items-start justify-between mb-3">
                                       <div className="flex items-center gap-2">
@@ -478,31 +826,30 @@ function Home() {
                       w-3 h-3 rounded-full animate-pulse
                       ${isDanger ? 'bg-red-500' : isCaution ? 'bg-yellow-500' : 'bg-green-500'}
                     `}></div>
+
                                         <span className={`
                       text-sm font-bold px-3 py-1 rounded-full border
                       ${isDanger
                                             ? 'bg-red-500/20 text-red-300 border-red-500/40'
                                             : isCaution
                                               ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40'
-                                              : 'bg-green-500/20 text-green-300 border-green-500/40'
-                                          }
+                                              : 'bg-green-500/20 text-green-300 border-green-500/40'}
                     `}>
                                           {report.category}
                                         </span>
                                       </div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 bg-[#1E1E1E] px-2 py-1 rounded-lg border border-gray-700">
-                                          {new Date(report.date).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit'
-                                          })}
-                                        </span>
-                                      </div>
+
+                                      <span className="text-xs text-gray-400 bg-[#1E1E1E] px-2 py-1 rounded-lg border border-gray-700">
+                                        {new Date(report.date).toLocaleDateString('en-US', {
+                                          month: 'short',
+                                          day: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        })}
+                                      </span>
                                     </div>
 
-                                    {/* Image Preview */}
+                                    {/* Image */}
                                     {report.image_url && (
                                       <div className="mb-3">
                                         <img
@@ -518,29 +865,45 @@ function Home() {
                                       {report.description}
                                     </p>
 
-                                    {/* Footer */}
+                                    {/* LOCATION + VOTES + TAG */}
                                     <div className="flex items-center justify-between pt-3 border-t border-gray-700/50">
                                       <div className="flex items-center gap-2 text-gray-400">
                                         <MapPin className="w-4 h-4" />
                                         <span className="text-xs font-mono">
-                                          {report.location && Array.isArray(report.location)
+                                          {Array.isArray(report.location)
                                             ? `${report.location[0].toFixed(4)}, ${report.location[1].toFixed(4)}`
-                                            : 'Location not available'
-                                          }
+                                            : 'Location not available'}
                                         </span>
                                       </div>
-                                      <div className="flex items-center justify-between mt-2">
+
+                                      {/* Voting */}
+                                      <div className="flex items-center gap-3 mt-2">
                                         <button
+                                          disabled={userVotes.loading === report.id}
                                           onClick={() => handleVote(report.id, "upvote")}
-                                          className="flex items-center text-green-500 hover:text-green-600"
+                                          className={`
+                        flex items-center gap-1 text-sm px-2 py-1 rounded-md transition-colors
+                        ${userVotes[report.id] === "upvote"
+                                              ? "text-green-500 bg-green-500/10"
+                                              : "text-gray-400 hover:text-green-400 hover:bg-green-500/10"}
+                        ${userVotes.loading === report.id && "opacity-50 cursor-not-allowed"}
+                      `}
                                         >
-                                          👍 {report.upvotes}
+                                          {userVotes[report.id] === "upvote" ? "⬆️" : "⬆"} {report.upvotes}
                                         </button>
+
                                         <button
+                                          disabled={userVotes.loading === report.id}
                                           onClick={() => handleVote(report.id, "downvote")}
-                                          className="flex items-center text-red-500 hover:text-red-600"
+                                          className={`
+                        flex items-center gap-1 text-sm px-2 py-1 rounded-md transition-colors
+                        ${userVotes[report.id] === "downvote"
+                                              ? "text-red-500 bg-red-500/10"
+                                              : "text-gray-400 hover:text-red-400 hover:bg-red-500/10"}
+                        ${userVotes.loading === report.id && "opacity-50 cursor-not-allowed"}
+                      `}
                                         >
-                                          👎 {report.downvotes}
+                                          {userVotes[report.id] === "downvote" ? "⬇️" : "⬇"} {report.downvotes}
                                         </button>
                                       </div>
 
@@ -550,19 +913,55 @@ function Home() {
                                           ? 'bg-red-500/20 text-red-300'
                                           : isCaution
                                             ? 'bg-yellow-500/20 text-yellow-300'
-                                            : 'bg-green-500/20 text-green-300'
-                                        }
+                                            : 'bg-green-500/20 text-green-300'}
                   `}>
                                         {isDanger ? '🚨 High Risk' : isCaution ? '⚠️ Be Cautious' : '✅ Safe Area'}
                                       </div>
                                     </div>
 
-                                    {/* Hover effect line */}
+                                    {/* OWNER-ONLY ACTIONS */}
+                                    {isOwner && (
+                                      <div className="flex items-center justify-end gap-3 mt-3">
+
+                                        {/* EDIT BUTTON */}
+                                        <button
+                                          onClick={() => openEditForm(report)}
+                                          className="px-3 py-1 text-xs bg-blue-500/20 border border-blue-500/40 text-blue-300 rounded-lg hover:bg-blue-500/30"
+                                        >
+                                          ✏️ Edit
+                                        </button>
+
+                                        {/* MARK AS RESOLVED → delete from DB */}
+                                        <button
+                                          onClick={async () => {
+                                            const ok = window.confirm(
+                                              "Is the problem resolved?\n\nThis will permanently remove your report."
+                                            );
+                                            if (!ok) return;
+
+                                            try {
+                                              await deletePost(report.id);   // 🔥 use your existing delete logic
+                                              toast.success("Report marked as resolved");
+                                            } catch (err) {
+                                              console.error(err);
+                                              toast.error("Failed to mark resolved");
+                                            }
+                                          }}
+                                          className="px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                        >
+                                          Mark as Resolved
+                                        </button>
+
+                                      </div>
+                                    )}
+                                    
+                                    {/* Hover underline */}
                                     <div className={`
                   absolute bottom-0 left-1/2 transform -translate-x-1/2 w-0 h-0.5 rounded-full
                   group-hover:w-3/4 transition-all duration-300
                   ${isDanger ? 'bg-red-500' : isCaution ? 'bg-yellow-500' : 'bg-green-500'}
                 `}></div>
+
                                   </div>
                                 </div>
                               );
@@ -665,6 +1064,273 @@ function Home() {
             onClick={() => setShowSidebar(false)}
           />
         )}
+        {/* ===== EDIT REPORT MODAL (GLOBAL, ALWAYS CENTERED) ===== */}
+        {editReport && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+
+            <div
+              className="relative bg-[#1E1E1E] w-full max-w-xl mx-4 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden animate-fadeInUp"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxHeight: "85vh" }}
+            >
+
+              {/* Close Button */}
+              <button
+                onClick={() => setEditReport(null)}
+                className="absolute top-3 right-3 text-gray-300 hover:text-white p-1"
+              >
+                <X size={22} />
+              </button>
+
+              <div className="p-5 overflow-y-auto custom-scrollbar" style={{ maxHeight: "calc(85vh - 40px)" }}>
+                <form onSubmit={handleUpdateReport} className="space-y-5">
+
+                  {/* IMAGE */}
+                  <div className="flex flex-col items-center gap-3">
+
+                    {/* IMAGE / PLACEHOLDER */}
+                    <div
+                      className="w-full h-64 flex items-center justify-center bg-[#2C2C2C] border border-gray-700 rounded-xl cursor-pointer hover:bg-[#3a3a3a] transition"
+                      onClick={() => document.getElementById("edit-image-input").click()}
+                    >
+                      {editDraft.image_url ? (
+                        <img
+                          src={editDraft.image_url}
+                          className="w-full h-full object-cover rounded-xl"
+                          alt="Report"
+                        />
+                      ) : (
+                        <p className="text-gray-400 text-sm text-center px-4">
+                          No Image — <span className="text-blue-400 underline">Click to add image</span>
+                        </p>
+                      )}
+                    </div>
+
+                    {/* REMOVE IMAGE BUTTON */}
+                    {editDraft.image_url && (
+                      <button
+                        onClick={() => setEditDraft(prev => ({ ...prev, image_url: "" }))}
+                        className="px-3 py-1 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
+                      >
+                        Remove Image
+                      </button>
+                    )}
+
+                    {/* HIDDEN FILE INPUT */}
+                    <input
+                      type="file"
+                      id="edit-image-input"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setEditDraft(prev => ({ ...prev, image_url: reader.result }));
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </div>
+
+
+                  {/* DESCRIPTION */}
+                  <div>
+                    <label className="text-sm text-gray-300">Description</label>
+                    <textarea
+                      rows="4"
+                      value={editDraft.description}
+                      onChange={(e) => setEditDraft(prev => ({ ...prev, description: e.target.value }))}
+                      className="w-full p-3 rounded-lg bg-[#2C2C2C] border border-gray-700 text-white"
+                    />
+                  </div>
+
+                  {/* CATEGORY */}
+                  <div>
+                    <label className="text-sm text-gray-300">Category</label>
+                    <select
+                      value={editDraft.category}
+                      onChange={(e) => setEditDraft(prev => ({ ...prev, category: e.target.value }))}
+                      className="w-full p-3 rounded-lg bg-[#2C2C2C] border border-gray-700 text-white"
+                    >
+                      <option value="danger">Danger 🚨</option>
+                      <option value="caution">Caution ⚠️</option>
+                      <option value="safe">Safe ✅</option>
+                    </select>
+                  </div>
+
+                  {/* BUTTONS */}
+                  <div className="flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditReport(null)}
+                      className="px-4 py-2 rounded-lg bg-red-600 text-white"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-lg bg-blue-600 text-white"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+            </div>
+          </div>
+        )}
+        {showProfileModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+
+            <div className="relative bg-[#1f1f1f] text-white rounded-xl w-[420px] p-6 shadow-xl border border-gray-700">
+
+              {/* CLOSE BUTTON (X) */}
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="absolute top-3 right-3 text-gray-400 hover:text-white transition"
+              >
+                <X size={22} />
+              </button>
+
+              {/* Tabs */}
+              <div className="flex border-b border-gray-600 mb-4">
+                <button
+                  className={`px-3 py-2 ${profileTab === 'profile' ? 'border-b-2 border-blue-500' : ''}`}
+                  onClick={() => setProfileTab('profile')}
+                >
+                  Profile
+                </button>
+
+                <button
+                  className={`px-3 py-2 ml-4 ${profileTab === 'posts' ? 'border-b-2 border-blue-500' : ''}`}
+                  onClick={() => {
+                    setProfileTab('posts');
+                    fetchMyPosts();
+                  }}
+                >
+                  My Posts
+                </button>
+              </div>
+
+              {/* Profile Tab */}
+              {profileTab === "profile" && (
+                <>
+                  <h2 className="text-xl font-semibold mb-5">Edit Profile</h2>
+                  <label className="text-sm font-medium">SOS Numbers</label>
+                  {user.sosNumbers.map((num, i) => (
+                    <div key={i} className="flex gap-2 mt-2">
+                      <input
+                        type="text"
+                        value={num}
+                        onChange={(e) => {
+                          let arr = [...user.sosNumbers];
+                          arr[i] = e.target.value;
+                          setUser({ ...user, sosNumbers: arr });
+                        }}
+                        className="w-full bg-[#2c2c2c] border border-gray-600 rounded-lg p-2"
+                      />
+                      {user.sosNumbers.length > 1 && (
+                        <button
+                          onClick={() => {
+                            let arr = user.sosNumbers.filter((_, idx) => idx !== i);
+                            setUser({ ...user, sosNumbers: arr });
+                          }}
+                          className="bg-red-600 px-3 rounded-lg"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+
+                  <button
+                    onClick={() =>
+                      setUser({ ...user, sosNumbers: [...user.sosNumbers, ""] })
+                    }
+                    className="mt-3 bg-blue-600 px-3 py-1 rounded-lg text-sm ml-2"
+                  >
+                    + Add SOS Number
+                  </button>
+
+                  <div className="flex justify-end gap-3 mt-6">
+                    <button
+                      onClick={() => setShowProfileModal(false)}
+                      className="px-4 py-2 bg-gray-700 rounded-lg"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleProfileSave(user)}
+                      className="px-4 py-2 bg-green-600 rounded-lg"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* My Posts Tab */}
+              {profileTab === "posts" && (
+                <div className="max-h-[400px] overflow-y-auto">
+
+                  {myPosts.length === 0 ? (
+                    <p className="text-gray-400 text-sm">You haven't created any posts.</p>
+                  ) : (
+                    myPosts.map((post) => (
+                      <div key={post.id} className="bg-[#2b2b2b] p-3 rounded-lg mb-3">
+
+                        {/* IMAGE */}
+                        {post.image_url && (
+                          <img
+                            src={post.image_url}
+                            alt="Post"
+                            className="w-full h-40 object-cover rounded-lg mb-3 border border-gray-700"
+                          />
+                        )}
+
+                        <h3 className="font-semibold">{post.type}</h3>
+
+                        <p className="text-gray-400 text-sm line-clamp-2">
+                          {post.description}
+                        </p>
+
+                        <div className="flex justify-between mt-2 text-sm">
+                          <span>👍 {post.upvotes}</span>
+                          <span>👎 {post.downvotes}</span>
+                        </div>
+
+                        <div className="flex gap-2 mt-3">
+                          <button
+                            onClick={() => setEditReport({
+                              ...post,
+                              category: post.category || post.type
+                            })}   // 🔥 next step fixes this
+                            className="bg-blue-600 px-3 py-1 rounded-lg text-sm"
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            onClick={() => deletePost(post.id)}
+                            className="bg-red-600 px-3 py-1 rounded-lg text-sm"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

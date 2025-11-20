@@ -102,16 +102,17 @@ export const ReportForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!location) {
       setLocationError('Please select a location before submitting');
       return;
     }
-    if (!imageUrl) {
-      alert('Please upload an image before submitting');
-      return;
-    }
+    // if (!imageUrl) {
+    //   alert('Please upload an image before submitting');
+    //   return;
+    // }
 
-
+    const token = localStorage.getItem("token");
     setIsSubmitting(true);
 
     const report = {
@@ -120,20 +121,32 @@ export const ReportForm = () => {
       latitude: location[0],
       longitude: location[1],
       timestamp: new Date().toISOString(),
-      image_url: imageUrl,
+      image_url: imageUrl || "",
     };
 
-
     try {
+      const headers = {
+        "Content-Type": "application/json",
+      };
+
+      // 🔥 Only include Authorization header IF token exists
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const res = await fetch(`${base_url}/api/submitReport`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(report),
       });
 
       if (!res.ok) throw new Error('Failed to submit report');
 
-      alert('Report submitted successfully! 🎉');
+      alert(
+        token
+          ? "Report submitted successfully! 🎉"
+          : "Report submitted anonymously! 🎉"
+      );
 
       // Reset form
       setDescription('');
@@ -142,6 +155,8 @@ export const ReportForm = () => {
       setLocationMode('');
       setLocationError('');
       setShowSearchResults(false);
+      setImageUrl('');
+
     } catch (err) {
       console.error(err);
       alert('Error submitting report. Please try again.');
@@ -149,6 +164,7 @@ export const ReportForm = () => {
       setIsSubmitting(false);
     }
   };
+
 
   const getCurrentLocation = () => {
     setLocationError('');
@@ -447,7 +463,7 @@ export const ReportForm = () => {
           {/* Image Upload - Required */}
           <div className="bg-[#2A2A2A] p-3 rounded-lg border border-gray-600">
             <label className="block font-semibold mb-2">
-              Upload Image <span className="text-red-400">*</span>
+              Upload Image
             </label>
 
             <IKContext
