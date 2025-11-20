@@ -515,10 +515,12 @@ function Home() {
       const data = await res.json();
 
       if (res.ok) {
-        setUser({
-          ...user,
-          sosNumbers: data.data.contacts,
-        });
+       setUser({
+        ...user,
+        sosNumbers: Array.isArray(data.data.contacts)
+          ? data.data.contacts
+          : [""],
+      });
 
         setShowProfileModal(false);
       } else {
@@ -543,7 +545,7 @@ function Home() {
         if (res.ok) {
           setUser((prev) => ({
             ...prev,
-            sosNumbers: data.contacts || [""],
+            sosNumbers: Array.isArray(data.contacts) ? data.contacts : [""],
           }));
         }
       } catch (err) {
@@ -1221,7 +1223,7 @@ function Home() {
                 <>
                   <h2 className="text-xl font-semibold mb-5">Edit Profile</h2>
                   <label className="text-sm font-medium">SOS Numbers</label>
-                  {user.sosNumbers.map((num, i) => (
+                  {(Array.isArray(user.sosNumbers) ? user.sosNumbers : [""]).map((num, i) => (
                     <div key={i} className="flex gap-2 mt-2">
                       <input
                         type="text"
@@ -1251,7 +1253,7 @@ function Home() {
                     onClick={() =>
                       setUser({ ...user, sosNumbers: [...user.sosNumbers, ""] })
                     }
-                    className="mt-3 bg-blue-600 px-3 py-1 rounded-lg text-sm ml-2"
+                    className="mt-3 bg-blue-600 px-3 py-1 rounded-lg text-sm ml-0"
                   >
                     + Add SOS Number
                   </button>
